@@ -14,6 +14,7 @@ import javafx.scene.shape.Circle;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 import javafx.util.Duration;
+import javafx.scene.control.Tooltip;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -26,6 +27,7 @@ import cosmochat.database.DatabaseManager;
 import cosmochat.database.UserDAO;
 import cosmochat.database.ChatDAO;
 import cosmochat.database.MessageDAO;
+import cosmochat.database.UsageStatsDAO;
 import cosmochat.model.User;
 import cosmochat.auth.SessionManager;
 import cosmochat.security.PasswordHasher;
@@ -44,6 +46,7 @@ public class ChatController extends StackPane {
     private UserDAO userDAO;
     private ChatDAO chatDAO;
     private MessageDAO messageDAO;
+    private UsageStatsDAO usageStatsDAO;
     private SessionManager session;
     
     // UI Components
@@ -78,6 +81,7 @@ public class ChatController extends StackPane {
             userDAO = new UserDAO();
             chatDAO = new ChatDAO();
             messageDAO = new MessageDAO();
+            usageStatsDAO = new UsageStatsDAO();
             // Force initialization of DatabaseManager
             DatabaseManager.getInstance();
         } catch (Exception e) {
@@ -390,6 +394,20 @@ public class ChatController extends StackPane {
     }
 
     private void sendMessage() {
+        // Check rate limit if logged in
+        if (session.isLoggedIn()) {
+            try {
+                if (!usageStatsDAO.canSendMessage(session.getCurrentUser().getId())) {
+                    showToast("Лимит сообщений исчерпан (100/час)");
+                    return;
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                showToast("Ошибка проверки лимита");
+                return;
+            }
+        }
+
         String text = inputField.getText().trim();
         if (text.isEmpty()) return;
 
@@ -403,6 +421,19 @@ public class ChatController extends StackPane {
         inputField.clear();
         sendBtn.setDisable(true);
         sendBtn.getStyleClass().remove("send-btn-active");
+
+        // Increment usage counter asynchronously
+        if (session.isLoggedIn()) {
+            Task<Void> incTask = new Task<>() {
+                @Override
+                protected Void call() throws Exception {
+                    usageStatsDAO.incrementMessageCount(session.getCurrentUser().getId());
+                    return null;
+                }
+            };
+            incTask.setOnFailed(e -> incTask.getException().printStackTrace());
+            new Thread(incTask).start();
+        }
 
         // Скролл вниз
         scrollToBottom();
@@ -596,12 +627,23 @@ public class ChatController extends StackPane {
     private void updateFooter() {
         sidebarFooter.getChildren().clear();
         if (session.isLoggedIn() && session.getCurrentUser() != null) {
+            HBox userBox = new HBox(8);
+            userBox.setAlignment(Pos.CENTER_LEFT);
+            
             Label userLabel = new Label(session.getCurrentUser().getUsername());
             userLabel.getStyleClass().add("auth-user-label");
+            
+            Button profileBtn = new Button("👤");
+            profileBtn.getStyleClass().add("profile-btn");
+            profileBtn.setTooltip(new Tooltip("Профиль"));
+            profileBtn.setOnAction(e -> showProfileModal());
+            
+            userBox.getChildren().addAll(userLabel, profileBtn);
+            
             Button logoutBtn = new Button("Выйти");
             logoutBtn.getStyleClass().addAll("auth-btn", "auth-btn--logout");
             logoutBtn.setOnAction(e -> logout());
-            sidebarFooter.getChildren().addAll(userLabel, logoutBtn);
+            sidebarFooter.getChildren().addAll(userBox, logoutBtn);
         } else {
             Button loginBtn = new Button("Войти");
             loginBtn.getStyleClass().addAll("auth-btn", "auth-btn--login");
@@ -610,10 +652,10 @@ public class ChatController extends StackPane {
             registerBtn.getStyleClass().addAll("auth-btn", "auth-btn--register");
             registerBtn.setOnAction(e -> showModal("register"));
             sidebarFooter.getChildren().addAll(loginBtn, registerBtn);
-        }
-    }
-    
-    private void switchToChat(ChatItem chat) {
+         }
+     }
+     
+     private void switchToChat(ChatItem chat) {
         if (activeChat == chat) return;
         
         if (activeChat != null) activeChat.setActive(false);
@@ -790,6 +832,123 @@ public class ChatController extends StackPane {
         modalOverlay.getChildren().setAll(wrapper);
         modalOverlay.setVisible(true);
         modalOverlay.setMouseTransparent(false);
+    }
+
+    private void showProfileModal() {
+        if (session.getCurrentUser() == null) return;
+
+        VBox modalContent = new VBox(16);
+        modalContent.getStyleClass().add("modal");
+        modalContent.setMaxWidth(400);
+        modalContent.setPrefWidth(380);
+
+        Button closeBtn = new Button("×");
+        closeBtn.getStyleClass().add("modal-close");
+        StackPane.setAlignment(closeBtn, Pos.TOP_RIGHT);
+        closeBtn.setOnAction(e -> hideModal());
+
+        // Header with avatar
+        HBox header = new HBox(16);
+        header.setAlignment(Pos.CENTER_LEFT);
+
+        StackPane avatarWrapper = new StackPane();
+        avatarWrapper.getStyleClass().add("profile-avatar-wrapper");
+        Label avatar = new Label(session.getCurrentUser().getUsername().substring(0, 1).toUpperCase());
+        avatar.getStyleClass().add("profile-avatar");
+        avatarWrapper.getChildren().add(avatar);
+
+        VBox titleBox = new VBox(4);
+        Label nameLabel = new Label(session.getCurrentUser().getUsername());
+        nameLabel.getStyleClass().add("profile-name");
+        Label emailLabel = new Label(session.getCurrentUser().getEmail());
+        emailLabel.getStyleClass().add("profile-email");
+        titleBox.getChildren().addAll(nameLabel, emailLabel);
+
+        header.getChildren().addAll(avatarWrapper, titleBox);
+        HBox.setHgrow(titleBox, Priority.ALWAYS);
+
+        // Divider
+        Region divider = new Region();
+        divider.getStyleClass().add("profile-divider");
+
+        // Usage stats
+        VBox statsBox = new VBox(12);
+        statsBox.getStyleClass().add("profile-stats");
+
+        UsageStatsDAO.UsageStats stats;
+        try {
+            stats = usageStatsDAO.getCurrentStats(session.getCurrentUser().getId());
+        } catch (SQLException e) {
+            e.printStackTrace();
+            stats = null;
+        }
+
+        // Messages sent label
+        Label sentLabel = new Label("Сообщений отправлено");
+        sentLabel.getStyleClass().add("profile-stat-label");
+        Label sentCount = new Label(stats != null ? String.valueOf(stats.getMessagesSent()) : "—");
+        sentCount.getStyleClass().add("profile-stat-value");
+
+        HBox sentBox = new HBox();
+        sentBox.setAlignment(Pos.CENTER_LEFT);
+        Region sentSpacer = new Region();
+        HBox.setHgrow(sentSpacer, Priority.ALWAYS);
+        sentBox.getChildren().addAll(sentLabel, sentSpacer, sentCount);
+
+        // Limit
+        Label limitLabel = new Label("Лимит в час");
+        limitLabel.getStyleClass().add("profile-stat-label");
+        Label limitValue = new Label(String.valueOf(UsageStatsDAO.getHourlyMessageLimit()));
+        limitValue.getStyleClass().add("profile-stat-value");
+        HBox limitBox = new HBox();
+        limitBox.setAlignment(Pos.CENTER_LEFT);
+        Region limitSpacer = new Region();
+        HBox.setHgrow(limitSpacer, Priority.ALWAYS);
+        limitBox.getChildren().addAll(limitLabel, limitSpacer, limitValue);
+
+        // Progress bar
+        ProgressBar progress = new ProgressBar(stats != null ? stats.getUsagePercentage() / 100.0 : 0);
+        progress.getStyleClass().add("profile-progress");
+        progress.setPrefWidth(260);
+
+        // Remaining time
+        Label timeLabel = new Label();
+        if (stats != null && !stats.isWindowExpired()) {
+            timeLabel.setText("Сброс лимита через: " + formatTimeRemaining(stats.getWindowEnd()));
+            timeLabel.getStyleClass().add("profile-time-label");
+        } else {
+            timeLabel.setText("Лимит сброшен");
+            timeLabel.getStyleClass().add("profile-time-label-reset");
+        }
+
+        statsBox.getChildren().addAll(sentBox, limitBox, progress, timeLabel);
+
+        StackPane wrapper = new StackPane();
+        wrapper.getChildren().addAll(modalContent, closeBtn);
+        modalContent.getChildren().addAll(header, divider, statsBox);
+        modalOverlay.getChildren().setAll(wrapper);
+        modalOverlay.setVisible(true);
+        modalOverlay.setMouseTransparent(false);
+
+        // Auto-refresh time every minute
+        final UsageStatsDAO.UsageStats finalStats = stats;
+        Timeline refresh = new Timeline(new KeyFrame(Duration.minutes(1), e -> {
+            if (finalStats != null && !finalStats.isWindowExpired()) {
+                timeLabel.setText("Сброс лимита через: " + formatTimeRemaining(finalStats.getWindowEnd()));
+            }
+        }));
+        refresh.setCycleCount(Animation.INDEFINITE);
+        refresh.play();
+    }
+
+    private String formatTimeRemaining(java.time.LocalDateTime windowEnd) {
+        java.time.Duration d = java.time.Duration.between(java.time.LocalDateTime.now(), windowEnd);
+        long hours = d.toHours();
+        long minutes = d.toMinutes() % 60;
+        long seconds = d.getSeconds() % 60;
+        if (hours > 0) return String.format("%d ч %d мин", hours, minutes);
+        if (minutes > 0) return String.format("%d мин %d сек", minutes, seconds);
+        return String.format("%d сек", seconds);
     }
 
     private VBox createField(String label, String prompt) {

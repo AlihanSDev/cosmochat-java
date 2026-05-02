@@ -92,6 +92,16 @@ public class DatabaseManager {
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 )
             """);
+
+            // User usage tracking for rate limiting
+            stmt.execute("""
+                CREATE TABLE IF NOT EXISTS user_usage (
+                    user_id INTEGER PRIMARY KEY,
+                    messages_sent INTEGER NOT NULL DEFAULT 0,
+                    hour_window_start TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+            """);
         }
     }
 
