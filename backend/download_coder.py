@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Скрипт для загрузки квантованной модели Qwen2.5-Coder-1.5B с HuggingFace.
+Скрипт для загрузки квантованной модели Qwen2.5-Coder-1.5B-Instruct с HuggingFace.
 Модель специализирована на генерации кода и программировании.
 
-Репозиторий: lmstudio-community/Qwen2.5-Coder-1.5B-GGUF
-Формат: GGUF, квантование Q8_0 (~1.7 GB)
+Репозиторий: Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF
+Формат: GGUF (автовыбор файла, по умолчанию Q8_0)
+Размер: ~1.7 GB
 Требования к RAM: ~2-3 GB
 """
 
@@ -46,9 +47,9 @@ def find_best_gguf(repo_id: str, preferred: str = "Q8_0") -> str:
 
 
 def download_model(
-    repo_id: str = "lmstudio-community/Qwen2.5-Coder-1.5B-GGUF",
-    filename: str = "Qwen2.5-Coder-1.5B-Q8_0.gguf",
-    output_dir: str = "models/qwen2.5-coder-1.5b-gguf"
+    repo_id: str = "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+    filename: str = None,
+    output_dir: str = "models/qwen2.5-coder"
 ) -> str:
     """
     Загружает модель с HuggingFace.
@@ -91,10 +92,10 @@ def download_model(
 def main():
     """Точка входа скрипта."""
     print("\n" + "="*60)
-    print("  Qwen2.5-Coder-1.5B — загрузка модели")
+    print("  Qwen2.5-Coder-1.5B-Instruct — загрузка модели")
     print("="*60 + "\n")
 
-    output_dir = "models/qwen2.5-coder-1.5b-gguf"
+    output_dir = "models/qwen2.5-coder"
     filename = None
 
     if len(sys.argv) > 1:
@@ -103,7 +104,7 @@ def main():
         filename = sys.argv[2]
 
     download_model(
-        repo_id="lmstudio-community/Qwen2.5-Coder-1.5B-GGUF",
+        repo_id="Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF",
         filename=filename,
         output_dir=output_dir
     )
@@ -111,8 +112,8 @@ def main():
     print("\n" + "="*60)
     print("  Информация о модели:")
     print("="*60)
-    print(f"   • Модель: Qwen2.5-Coder-1.5B (GGUF)")
-    print(f"   • Квантование: Q8_0 (если доступно)")
+    print(f"   • Модель: Qwen2.5-Coder-1.5B-Instruct (GGUF)")
+    print(f"   • Квантование: Q8_0 (автовыбор, если не указан)")
     print(f"   • Требуемая RAM: ~2-3 GB")
     print(f"   • Специализация: генерация кода, отладка, рефакторинг")
     print(f"   • Для запуска: llama-cpp-python, llamafile или ollama")
