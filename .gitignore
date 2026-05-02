@@ -36,3 +36,24 @@ test.txt
 *.jar
 *.war
 *.ear
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+dist/
+build/
+models/
+*.gguf
