@@ -31,7 +31,10 @@ public class ChatItem {
     public String getIconGlyph() { return iconGlyph.get(); }
     public StringProperty iconGlyphProperty() { return iconGlyph; }
     public boolean isActive() { return active.get(); }
-    public void setActive(boolean value) { active.set(value); }
-    public BooleanProperty activeProperty() { return active; }
-    public ObservableList<ChatMessage> getMessages() { return messages; }
-}
+     public void setActive(boolean value) { active.set(value); }
+     public BooleanProperty activeProperty() { return active; }
+     public ObservableList<ChatMessage> getMessages() { return messages; }
+     
+     // Setter for updating ID after DB persistence (for new chats)
+     public void setId(int value) { id.set(value); }
+ }

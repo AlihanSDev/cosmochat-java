@@ -305,6 +305,17 @@ public class ChatController extends StackPane {
         return section;
     }
 
+    private void createNewChat(String firstMessage) {
+        String title = firstMessage.length() > 30 ? firstMessage.substring(0, 30) + "..." : firstMessage;
+        String[] icons = {"★", "☄", "🚀", "🌍", "🛰", "🌙"};
+        ChatItem newChat = new ChatItem(nextChatId++, title, "Сейчас", icons[(int)(Math.random() * icons.length)]);
+        chatHistory.add(0, newChat);
+        chatListView.getSelectionModel().select(0);
+        switchToChat(newChat);
+        // Mark as unsaved (new) chat — will be created on first message
+        activeChatId = 0;
+    }
+
     private void sendMessage() {
         if (!chatService.canSendMessage()) {
             showToast("Лимит сообщений исчерпан (100/час)");
@@ -314,39 +325,41 @@ public class ChatController extends StackPane {
         String text = inputField.getText().trim();
         if (text.isEmpty()) return;
 
-        int chatId = activeChatId != null ? activeChatId : 0;
+        // Если нет активного чата — создаём новый
+        if (activeChat == null) {
+            createNewChat(text);
+        }
 
-         // Optimistic UI — add user message immediately
-         addMessageLocally(ChatMessage.Role.USER, text);
-         inputField.clear();
-         sendBtn.setDisable(true);
-         sendBtn.getStyleClass().remove("send-btn-active");
+        // Добавляем сообщение пользователя
+        addMessageLocally(ChatMessage.Role.USER, text);
+        inputField.clear();
+        sendBtn.setDisable(true);
+        sendBtn.getStyleClass().remove("send-btn-active");
 
-         scrollToBottom();
-         showTypingIndicator();
+        scrollToBottom();
+        showTypingIndicator();
 
-         Task<Void> aiTask = new Task<Void>() {
+        Task<SendMessageResult> aiTask = new Task<>() {
             @Override
-            protected Void call() throws Exception {
-                SendMessageResult result = chatService.sendMessage(chatId, text);
-                Platform.runLater(() -> {
-                    removeTypingIndicator();
-                    addMessageLocally(ChatMessage.Role.AI, result.aiMessage().getText());
-                    // If new chat created, update activeChatId and add to sidebar
-                    if (activeChatId == null || activeChatId == 0) {
-                        activeChatId = result.chatId().getValue();
-                        // Create ChatItem for new chat
-                        String title = text.length() > 30 ? text.substring(0, 30) + "..." : text;
-                        ChatItem newChat = new ChatItem(activeChatId, title, "Сейчас", "★");
-                        chatHistory.add(0, newChat);
-                        chatListView.getSelectionModel().select(0);
-                        switchToChat(newChat);
-                    }
-                    scrollToBottom();
-                });
-                return null;
+            protected SendMessageResult call() throws Exception {
+                int chatId = activeChatId != null ? activeChatId : 0;
+                return chatService.sendMessage(chatId, text);
             }
         };
+
+        aiTask.setOnSucceeded(e -> {
+            removeTypingIndicator();
+            SendMessageResult result = aiTask.getValue();
+            addMessageLocally(ChatMessage.Role.AI, result.aiMessage().getText());
+            // Если это был новый чат — обновляем ID
+            if (activeChatId == 0) {
+                activeChatId = result.chatId().getValue();
+                if (activeChat != null) {
+                    activeChat.setId(activeChatId);
+                }
+            }
+            scrollToBottom();
+        });
 
         aiTask.setOnFailed(e -> {
             removeTypingIndicator();
@@ -363,10 +376,15 @@ public class ChatController extends StackPane {
         new Thread(aiTask).start();
     }
 
-    private void addMessageLocally(ChatMessage.Role role, String text) {
-        ChatMessage msg = new ChatMessage(role, text, getTimeString());
-        messagesContainer.getChildren().add(createMessageNode(msg));
-    }
+
+
+     private void addMessageLocally(ChatMessage.Role role, String text) {
+         ChatMessage msg = new ChatMessage(role, text, getTimeString());
+         messagesContainer.getChildren().add(createMessageNode(msg));
+         if (activeChat != null) {
+             activeChat.getMessages().add(msg);
+         }
+     }
 
     private HBox createMessageNode(ChatMessage msg) {
         HBox messageBox = new HBox(10);
