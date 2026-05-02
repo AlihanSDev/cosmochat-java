@@ -1,0 +1,38 @@
+# Build output
+build/
+out/
+target/
+bin/
+.classpath
+.project
+.settings/
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# JavaFX
+javafx/
+lib/
+
+# Maven/Gradle
+pom.xml
+pom.xml.asc
+*.gradle
+.gradle/
+
+# Test files
+test.txt
+
+# Other
+*.jar
+*.war
+*.ear
