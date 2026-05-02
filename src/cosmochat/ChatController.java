@@ -17,8 +17,18 @@ import javafx.util.Duration;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.sql.SQLException;
 import java.util.*;
 import javafx.concurrent.Task;
+
+// Database and auth imports
+import cosmochat.database.DatabaseManager;
+import cosmochat.database.UserDAO;
+import cosmochat.database.ChatDAO;
+import cosmochat.database.MessageDAO;
+import cosmochat.model.User;
+import cosmochat.auth.SessionManager;
+import cosmochat.security.PasswordHasher;
 
 public class ChatController extends StackPane {
     private static final double SIDEBAR_WIDTH = 280;
@@ -30,14 +40,21 @@ public class ChatController extends StackPane {
     // AI Service
     private final AiService aiService = new AiService();
     
+    // Database & Auth
+    private UserDAO userDAO;
+    private ChatDAO chatDAO;
+    private MessageDAO messageDAO;
+    private SessionManager session;
+    
     // UI Components
     private VBox sidebar;
     private ListView<ChatItem> chatListView;
     private TextField inputField;
     private Button sendBtn;
-    private VBox inputArea; // общий контейнер ввода (перемещается между экранами)
+    private VBox inputArea;
     private StackPane modalOverlay;
     private VBox toastContainer;
+    private VBox sidebarFooter;
     
     // Chat View Components
     private ScrollPane messagesScrollPane;
@@ -49,13 +66,36 @@ public class ChatController extends StackPane {
     private Region fadeOverlay; // Оверлей для анимации затемнения
 
     public ChatController() {
+        initializeDatabase();
+        session = SessionManager.getInstance();
         initializeData();
         initializeUI();
         animateEntrance();
     }
+    
+    private void initializeDatabase() {
+        try {
+            userDAO = new UserDAO();
+            chatDAO = new ChatDAO();
+            messageDAO = new MessageDAO();
+            // Force initialization of DatabaseManager
+            DatabaseManager.getInstance();
+        } catch (Exception e) {
+            e.printStackTrace();
+            showToast("Ошибка инициализации базы данных");
+        }
+    }
 
     private void initializeData() {
-        // Заполняем историю тестовыми данными
+        if (session.isLoggedIn() && session.getCurrentUser() != null) {
+            loadChatsFromDatabase();
+        } else {
+            loadSampleChats();
+        }
+        // activeChat остаётся null, показываем главный экран
+    }
+    
+    private void loadSampleChats() {
         chatHistory.addAll(
             new ChatItem(1, "Структура Солнечной системы", "Сегодня", "☀"),
             new ChatItem(2, "Квантовая механика для начинающих", "Сегодня", "⚛"),
@@ -68,7 +108,20 @@ public class ChatController extends StackPane {
             new ChatItem(9, "Радиосигналы из глубокого космоса", "2 недели назад", "📡"),
             new ChatItem(10, "Температура абсолютного нуля", "2 недели назад", "❄")
         );
-        // activeChat остаётся null, показываем главный экран
+        nextChatId = 11;
+    }
+    
+    private void loadChatsFromDatabase() {
+        try {
+            int userId = session.getCurrentUser().getId();
+            List<ChatItem> dbChats = chatDAO.getChatsForUser(userId);
+            chatHistory.addAll(dbChats);
+            nextChatId = dbChats.stream().mapToInt(ChatItem::getId).max().orElse(0) + 1;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            showToast("Ошибка загрузки чатов из базы");
+            loadSampleChats(); // fallback
+        }
     }
 
     private void initializeUI() {
@@ -532,20 +585,32 @@ public class ChatController extends StackPane {
             if (newVal != null) switchToChat(newVal);
         });
 
-        VBox footer = new VBox(8);
-        footer.getStyleClass().add("sidebar-footer");
-
-        Button loginBtn = new Button("Войти");
-        loginBtn.getStyleClass().addAll("auth-btn", "auth-btn--login");
-        loginBtn.setOnAction(e -> showModal("login"));
-
-        Button registerBtn = new Button("Регистрация");
-        registerBtn.getStyleClass().addAll("auth-btn", "auth-btn--register");
-        registerBtn.setOnAction(e -> showModal("register"));
-
-        footer.getChildren().addAll(loginBtn, registerBtn);
-        sidebarBox.getChildren().addAll(header, newChatWrapper, searchWrapper, historyLabel, chatListView, footer);
+        sidebarFooter = new VBox(8);
+        sidebarFooter.getStyleClass().add("sidebar-footer");
+        updateFooter();
+        
+        sidebarBox.getChildren().addAll(header, newChatWrapper, searchWrapper, historyLabel, chatListView, sidebarFooter);
         return sidebarBox;
+    }
+    
+    private void updateFooter() {
+        sidebarFooter.getChildren().clear();
+        if (session.isLoggedIn() && session.getCurrentUser() != null) {
+            Label userLabel = new Label(session.getCurrentUser().getUsername());
+            userLabel.getStyleClass().add("auth-user-label");
+            Button logoutBtn = new Button("Выйти");
+            logoutBtn.getStyleClass().addAll("auth-btn", "auth-btn--logout");
+            logoutBtn.setOnAction(e -> logout());
+            sidebarFooter.getChildren().addAll(userLabel, logoutBtn);
+        } else {
+            Button loginBtn = new Button("Войти");
+            loginBtn.getStyleClass().addAll("auth-btn", "auth-btn--login");
+            loginBtn.setOnAction(e -> showModal("login"));
+            Button registerBtn = new Button("Регистрация");
+            registerBtn.getStyleClass().addAll("auth-btn", "auth-btn--register");
+            registerBtn.setOnAction(e -> showModal("register"));
+            sidebarFooter.getChildren().addAll(loginBtn, registerBtn);
+        }
     }
     
     private void switchToChat(ChatItem chat) {
@@ -634,17 +699,94 @@ public class ChatController extends StackPane {
         closeBtn.setOnAction(e -> hideModal());
         Label title = new Label(type.equals("login") ? "Вход" : "Регистрация");
         title.getStyleClass().add("modal-title");
-        Label desc = new Label(type.equals("login") ? "Войдите, чтобы сохранять историю" : "Создайте аккаунт");
+        Label desc = new Label(type.equals("login") ? "Войдите, чтобы сохранять историю" : "Создайте аккаунт для синхронизации");
         desc.getStyleClass().add("modal-desc");
+        
         VBox fields = new VBox(14);
-        if (type.equals("register")) fields.getChildren().add(createField("ИМЯ", "Ваше имя"));
-        fields.getChildren().addAll(createField("EMAIL", "you@example.com"), createField("ПАРОЛЬ", "Пароль"));
+        TextField nameField = new TextField();
+        if (type.equals("register")) {
+            Label nameLabel = new Label("ИМЯ");
+            nameLabel.getStyleClass().add("modal-field-label");
+            nameField.setPromptText("Ваше имя");
+            nameField.getStyleClass().add("modal-field-input");
+            fields.getChildren().addAll(nameLabel, nameField);
+        }
+        Label emailLabel = new Label("EMAIL");
+        emailLabel.getStyleClass().add("modal-field-label");
+        TextField emailField = new TextField();
+        emailField.setPromptText("you@example.com");
+        emailField.getStyleClass().add("modal-field-input");
+        Label passwordLabel = new Label("ПАРОЛЬ");
+        passwordLabel.getStyleClass().add("modal-field-label");
+        TextField passwordField = new TextField();
+        passwordField.setPromptText("Пароль");
+        passwordField.getStyleClass().add("modal-field-input");
+        fields.getChildren().addAll(emailLabel, emailField, passwordLabel, passwordField);
+        
         Button submitBtn = new Button(type.equals("login") ? "Войти" : "Создать аккаунт");
         submitBtn.getStyleClass().add("modal-submit");
-        submitBtn.setOnAction(e -> { hideModal(); showToast(type.equals("login") ? "Вы вошли!" : "Аккаунт создан"); });
+        Label errorLabel = new Label();
+        errorLabel.getStyleClass().add("modal-error");
+        errorLabel.setVisible(false);
+        errorLabel.setStyle("-fx-text-fill: #ff6b6b; -fx-font-size: 12px;");
+        
+        submitBtn.setOnAction(e -> {
+            String email = emailField.getText().trim();
+            String password = passwordField.getText();
+            if (email.isEmpty() || password.isEmpty()) {
+                errorLabel.setText("Заполните email и пароль");
+                errorLabel.setVisible(true);
+                return;
+            }
+            submitBtn.setDisable(true);
+            Task<Boolean> authTask = new Task<>() {
+                @Override
+                protected Boolean call() throws Exception {
+                    if (type.equals("login")) {
+                        Optional<User> user = userDAO.authenticate(email, password);
+                        if (user.isPresent()) {
+                            session.login(user.get());
+                            return true;
+                        }
+                    } else {
+                        String username = nameField.getText().trim();
+                        if (username.isEmpty()) {
+                            throw new Exception("Введите имя");
+                        }
+                        Optional<User> user = userDAO.register(username, email, password);
+                        if (user.isPresent()) {
+                            session.login(user.get());
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+            };
+            authTask.setOnSucceeded(ev -> {
+                submitBtn.setDisable(false);
+                boolean success = authTask.getValue();
+                if (success) {
+                    hideModal();
+                    loadChatsFromDatabase();
+                    updateFooter();
+                    showToast(type.equals("login") ? "Добро пожаловать!" : "Аккаунт создан");
+                } else {
+                    errorLabel.setText(type.equals("login") ? "Неверный email или пароль" : "Email уже занят");
+                    errorLabel.setVisible(true);
+                }
+            });
+            authTask.setOnFailed(ev -> {
+                submitBtn.setDisable(false);
+                Throwable ex = authTask.getException();
+                errorLabel.setText("Ошибка: " + ex.getMessage());
+                errorLabel.setVisible(true);
+            });
+            new Thread(authTask).start();
+        });
+        
         StackPane wrapper = new StackPane();
         wrapper.getChildren().addAll(modalContent, closeBtn);
-        modalContent.getChildren().addAll(title, desc, fields, submitBtn);
+        modalContent.getChildren().addAll(title, desc, fields, errorLabel, submitBtn);
         modalOverlay.getChildren().setAll(wrapper);
         modalOverlay.setVisible(true);
         modalOverlay.setMouseTransparent(false);
@@ -751,4 +893,16 @@ public class ChatController extends StackPane {
             }
         }
     }
-}
+    
+    private void logout() {
+        session.logout();
+        chatHistory.clear();
+        loadSampleChats();
+        if (activeChat != null) {
+            activeChat.setActive(false);
+            activeChat = null;
+        }
+        showMainScreen();
+        updateFooter();
+        showToast("Вы вышли из аккаунта");
+    }}

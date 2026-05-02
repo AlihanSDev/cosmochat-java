@@ -42,3 +42,7 @@ Thumbs.db
 # Temporary
 tmp/
 temp/
+
+# User database
+# SQLite database stored in ~/.cosmochat/cosmo_chat.db
+# (ignored globally, not in project)

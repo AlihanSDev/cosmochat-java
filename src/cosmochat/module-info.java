@@ -3,7 +3,12 @@ module cosmochat {
     requires javafx.graphics;
     requires java.net.http;
     requires com.google.gson;
+    requires java.sql;
+    requires org.xerial.sqlitejdbc;
     
-    exports cosmochat;
     opens cosmochat to javafx.graphics, javafx.controls;
+    opens cosmochat.database to java.sql;
+    opens cosmochat.model to java.sql;
+    opens cosmochat.security to java.sql;
+    opens cosmochat.auth to java.sql;
 }
