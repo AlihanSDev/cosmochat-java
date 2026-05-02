@@ -12,12 +12,18 @@
 
 import sys
 import os
+import io
 from pathlib import Path
+
+# Fix Windows console encoding for Unicode
+if os.name == 'nt':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 try:
     from llama_cpp import Llama
 except ImportError:
-    print("❌ llama-cpp-python не установлена!")
+    print("[ERR] llama-cpp-python не установлена!")
     print("Установите командой:")
     print("  pip install llama-cpp-python")
     sys.exit(1)
@@ -26,14 +32,14 @@ try:
     from flask import Flask, request, jsonify
     from flask_cors import CORS
 except ImportError:
-    print("❌ Flask не установлен!")
+    print("[ERR] Flask не установлен!")
     print("Установите командой:")
     print("  pip install flask flask-cors")
     sys.exit(1)
 
 
 # Конфигурация
-MODEL_PATH = "models/qwen2.5-1.5b-instruct-gguf/Qwen2.5-1.5B-Instruct-Q8_0.gguf"
+MODEL_PATH = "models/qwen2.5-coder/qwen2.5-coder-1.5b-instruct-q2_k.gguf"
 HOST = "127.0.0.1"
 PORT = 5000
 MAX_TOKENS = 512
@@ -53,12 +59,12 @@ def load_model():
     model_file = Path(MODEL_PATH)
     
     if not model_file.exists():
-        print(f"❌ Модель не найдена: {MODEL_PATH}")
-        print("Сначала запустите: python backend/download_instruct.py")
+        print(f"Model not found: {MODEL_PATH}")
+        print("First run: python backend/download_instruct.py")
         return False
     
-    print(f"🤖 Загрузка модели: {MODEL_PATH}")
-    print("Это может занять несколько минут...")
+    print(f"Loading model: {MODEL_PATH}")
+    print("This may take a few minutes...")
     
     try:
         llm = Llama(
@@ -68,10 +74,10 @@ def load_model():
             n_gpu_layers=0,  # 0 = только CPU (для ноутбуков без GPU)
             verbose=False,
         )
-        print(f"✅ Модель загружена успешно!")
+        print(f"Model loaded successfully!")
         return True
     except Exception as e:
-        print(f"❌ Ошибка загрузки модели: {e}")
+        print(f"Error loading model: {e}")
         return False
 
 
@@ -100,7 +106,7 @@ def chat():
     max_tokens = data.get('max_tokens', MAX_TOKENS)
     temperature = data.get('temperature', TEMPERATURE)
     
-    print(f"📥 Запрос: {message}")
+    print(f"[REQ] Запрос: {message}")
     
     try:
         # Формируем промпт для Qwen Instruct
@@ -117,7 +123,7 @@ def chat():
         
         response_text = output['choices'][0]['text'].strip()
         
-        print(f"📤 Ответ: {response_text}")
+        print(f"[RESP] Ответ: {response_text}")
         
         return jsonify({
             'response': response_text,
@@ -126,7 +132,7 @@ def chat():
         })
         
     except Exception as e:
-        print(f"❌ Ошибка генерации: {e}")
+        print(f"[ERR] Ошибка генерации: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -162,7 +168,7 @@ def generate():
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("🏆 Sportsense AI - Qwen2.5-1.5B Local API Server")
+    print("Sportsense AI - Qwen2.5-1.5B Local API Server")
     print("=" * 60)
     
     # Загрузка модели
@@ -170,12 +176,12 @@ if __name__ == '__main__':
         sys.exit(1)
     
     # Запуск сервера
-    print(f"\n🌐 Запуск сервера на http://{HOST}:{PORT}")
+    print(f"\nStarting server at http://{HOST}:{PORT}")
     print("Endpoints:")
-    print("  GET  /health  - проверка доступности")
-    print("  POST /chat    - запрос к чат-боту")
-    print("  POST /generate - генерация текста")
-    print("\nНажмите Ctrl+C для остановки")
+    print("  GET  /health  - health check")
+    print("  POST /chat    - chat request")
+    print("  POST /generate - text generation")
+    print("\nPress Ctrl+C to stop")
     print("=" * 60)
     
     # Отключаем dotenv для избежания ошибок на Windows

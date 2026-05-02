@@ -1,5 +1,15 @@
 package cosmochat;
 
+import cosmochat.application.service.ChatService;
+import cosmochat.application.dto.ChatDTO;
+import cosmochat.application.dto.MessageDTO;
+import cosmochat.application.dto.UsageStats;
+import cosmochat.application.dto.SendMessageResult;
+import cosmochat.application.dto.UserDTO;
+import cosmochat.domain.Role;
+import cosmochat.domain.UserId;
+import cosmochat.ChatMessage;
+
 import javafx.animation.*;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -11,44 +21,29 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
-import javafx.scene.text.Text;
-import javafx.scene.text.TextFlow;
 import javafx.util.Duration;
 import javafx.scene.control.Tooltip;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.sql.SQLException;
-import java.util.*;
+import java.util.List;
 import javafx.concurrent.Task;
 
-// Database and auth imports
-import cosmochat.database.DatabaseManager;
-import cosmochat.database.UserDAO;
-import cosmochat.database.ChatDAO;
-import cosmochat.database.MessageDAO;
-import cosmochat.database.UsageStatsDAO;
-import cosmochat.model.User;
-import cosmochat.auth.SessionManager;
-import cosmochat.security.PasswordHasher;
-
+/**
+ * ChatController (Presentation Layer) — thin UI controller.
+ * Delegates all business logic to ChatService.
+ */
 public class ChatController extends StackPane {
     private static final double SIDEBAR_WIDTH = 280;
     private final ObservableList<ChatItem> chatHistory = FXCollections.observableArrayList();
     private ChatItem activeChat;
+    private Integer activeChatId; // database ID
     private int nextChatId = 1;
     private boolean sidebarOpen = true;
-    
-    // AI Service
-    private final AiService aiService = new AiService();
-    
-    // Database & Auth
-    private UserDAO userDAO;
-    private ChatDAO chatDAO;
-    private MessageDAO messageDAO;
-    private UsageStatsDAO usageStatsDAO;
-    private SessionManager session;
-    
+
+    // Application Service (orchestrates use cases)
+    private final ChatService chatService;
+
     // UI Components
     private VBox sidebar;
     private ListView<ChatItem> chatListView;
@@ -58,72 +53,45 @@ public class ChatController extends StackPane {
     private StackPane modalOverlay;
     private VBox toastContainer;
     private VBox sidebarFooter;
-    
-    // Chat View Components
     private ScrollPane messagesScrollPane;
-    private VBox messagesContainer; // Контейнер для сообщений или главного экрана
-    private StackPane chatViewContainer; // Центральная область
+    private VBox messagesContainer;
+    private StackPane chatViewContainer;
     private Label headerTitle;
-    private VBox mainScreen; // Главный экран (лого, подсказки)
-    private VBox chatScreen; // Экран чата (сообщения)
-    private Region fadeOverlay; // Оверлей для анимации затемнения
+    private VBox mainScreen;
+    private VBox chatScreen;
 
-    public ChatController() {
-        initializeDatabase();
-        session = SessionManager.getInstance();
+    public ChatController(ChatService chatService) {
+        this.chatService = chatService;
         initializeData();
         initializeUI();
         animateEntrance();
     }
-    
-    private void initializeDatabase() {
-        try {
-            userDAO = new UserDAO();
-            chatDAO = new ChatDAO();
-            messageDAO = new MessageDAO();
-            usageStatsDAO = new UsageStatsDAO();
-            // Force initialization of DatabaseManager
-            DatabaseManager.getInstance();
-        } catch (Exception e) {
-            e.printStackTrace();
-            showToast("Ошибка инициализации базы данных");
+
+    private void initializeData() {
+        if (chatService.isLoggedIn()) {
+            loadChatsFromDatabase();
         }
     }
 
-    private void initializeData() {
-        if (session.isLoggedIn() && session.getCurrentUser() != null) {
-            loadChatsFromDatabase();
-        }
-        // Если пользователь не авторизован — список чатов остаётся пустым
-        // activeChat остаётся null, показываем главный экран
-    }
-    
-    private void loadSampleChats() {
-        chatHistory.addAll(
-            new ChatItem(1, "Структура Солнечной системы", "Сегодня", "☀"),
-            new ChatItem(2, "Квантовая механика для начинающих", "Сегодня", "⚛"),
-            new ChatItem(3, "Жизнь на Европе, спутнике Юпитера", "Вчера", "🌍"),
-            new ChatItem(4, "Парадокс Ферми и тихая Вселенная", "Вчера", "🛰"),
-            new ChatItem(5, "Тёмная материя и тёмная энергия", "3 дня назад", "🌙"),
-            new ChatItem(6, "Миссия Артемида и будущее Луны", "5 дней назад", "🚀"),
-            new ChatItem(7, "Сингулярность в чёрных дырах", "Неделю назад", "💥"),
-            new ChatItem(8, "Многомерные теории пространства", "Неделю назад", "◇"),
-            new ChatItem(9, "Радиосигналы из глубокого космоса", "2 недели назад", "📡"),
-            new ChatItem(10, "Температура абсолютного нуля", "2 недели назад", "❄")
-        );
-        nextChatId = 11;
-    }
-    
     private void loadChatsFromDatabase() {
-        try {
-            int userId = session.getCurrentUser().getId();
-            List<ChatItem> dbChats = chatDAO.getChatsForUser(userId);
-            chatHistory.addAll(dbChats);
-            nextChatId = dbChats.stream().mapToInt(ChatItem::getId).max().orElse(0) + 1;
-        } catch (SQLException e) {
-            e.printStackTrace();
-            showToast("Ошибка загрузки чатов из базы");
-            loadSampleChats(); // fallback
+        List<ChatDTO> dbChats = chatService.getChatsForCurrentUser();
+        for (ChatDTO chatDto : dbChats) {
+            ChatItem item = new ChatItem(
+                chatDto.id(),
+                chatDto.title(),
+                chatDto.date(),
+                chatDto.iconGlyph()
+            );
+            // Load messages for this chat
+            List<MessageDTO> msgDtos = chatService.getMessagesForChat(chatDto.id());
+            for (MessageDTO msgDto : msgDtos) {
+                ChatMessage.Role role = msgDto.role() == cosmochat.domain.Role.USER ? ChatMessage.Role.USER : ChatMessage.Role.AI;
+                item.getMessages().add(new ChatMessage(role, msgDto.text(), msgDto.time()));
+            }
+            chatHistory.add(item);
+        }
+        if (!dbChats.isEmpty()) {
+            nextChatId = dbChats.stream().mapToInt(ChatDTO::id).max().orElse(0) + 1;
         }
     }
 
@@ -159,7 +127,6 @@ public class ChatController extends StackPane {
         contentLayer.prefWidthProperty().bind(this.widthProperty());
         contentLayer.prefHeightProperty().bind(this.heightProperty());
 
-        // Изначально показываем главный экран
         showMainScreen();
     }
 
@@ -168,24 +135,19 @@ public class ChatController extends StackPane {
         root.getStyleClass().add("main-area");
 
         VBox layout = new VBox();
-        
-        // Header
         HBox header = new HBox();
         header.getStyleClass().add("chat-header");
         header.setAlignment(Pos.CENTER);
         headerTitle = new Label("CosmoChat");
         headerTitle.getStyleClass().add("chat-header-title");
         header.getChildren().add(headerTitle);
-        
-        // Container for screens
+
         chatViewContainer = new StackPane();
         chatViewContainer.getStyleClass().add("chat-view-container");
         VBox.setVgrow(chatViewContainer, Priority.ALWAYS);
-        
-        // Create shared input area (single instance)
+
         inputArea = createInputArea();
-        
-        // Build main screen: logo + input + divider + hints
+
         mainScreen = new VBox();
         mainScreen.getStyleClass().add("main-screen");
         mainScreen.setAlignment(Pos.TOP_CENTER);
@@ -198,8 +160,7 @@ public class ChatController extends StackPane {
         HBox hints = createHints();
         mainScreen.getChildren().addAll(logoSection, inputArea, divider, hints);
         mainScreen.setVisible(true);
-        
-        // Build chat screen: messages + input at bottom
+
         chatScreen = new VBox();
         chatScreen.getStyleClass().add("chat-screen");
         chatScreen.setAlignment(Pos.CENTER);
@@ -213,12 +174,9 @@ public class ChatController extends StackPane {
         messagesScrollPane.setContent(messagesContainer);
         VBox.setVgrow(messagesScrollPane, Priority.ALWAYS);
         chatScreen.getChildren().add(messagesScrollPane);
-        // inputArea will be added when switching to chat
         chatScreen.setVisible(false);
-        
-        // Add screens to container
+
         chatViewContainer.getChildren().addAll(mainScreen, chatScreen);
-        
         layout.getChildren().addAll(header, chatViewContainer);
         root.getChildren().add(layout);
         return root;
@@ -227,14 +185,11 @@ public class ChatController extends StackPane {
     private VBox createInputArea() {
         VBox area = new VBox();
         area.getStyleClass().add("chat-input-area");
-        
         VBox wrapper = new VBox();
         wrapper.getStyleClass().add("chat-input-wrapper");
-        
         inputField = new TextField();
         inputField.setPromptText("Спросите что угодно...");
         inputField.getStyleClass().add("chat-input-field");
-        
         inputField.focusedProperty().addListener((obs, old, val) -> {
             if (val) wrapper.getStyleClass().add("input-wrapper-focused");
             else wrapper.getStyleClass().remove("input-wrapper-focused");
@@ -243,28 +198,23 @@ public class ChatController extends StackPane {
         HBox bottomBar = new HBox();
         bottomBar.getStyleClass().add("input-bottom");
         bottomBar.setAlignment(Pos.CENTER_LEFT);
-        
         HBox actions = new HBox(4);
         Button attachBtn = new Button("📎");
         attachBtn.getStyleClass().add("action-btn");
         Button settingsBtn = new Button("⚙");
         settingsBtn.getStyleClass().add("action-btn");
         actions.getChildren().addAll(attachBtn, settingsBtn);
-
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-
         sendBtn = new Button("↑");
         sendBtn.getStyleClass().add("send-btn");
         sendBtn.setDisable(true);
-        
         inputField.textProperty().addListener((obs, old, val) -> {
             boolean hasText = !val.trim().isEmpty();
             sendBtn.setDisable(!hasText);
             if (hasText) sendBtn.getStyleClass().add("send-btn-active");
             else sendBtn.getStyleClass().remove("send-btn-active");
         });
-        
         sendBtn.setOnAction(e -> sendMessage());
         inputField.setOnKeyPressed(e -> { if (e.getCode() == KeyCode.ENTER) sendMessage(); });
 
@@ -278,14 +228,12 @@ public class ChatController extends StackPane {
         HBox hintsBox = new HBox(8);
         hintsBox.getStyleClass().add("hints");
         hintsBox.setAlignment(Pos.CENTER);
-
         String[][] hintData = {
             {"Чёрные дыры", "Расскажи о чёрных дырах"},
             {"Сколько звёзд?", "Сколько звёзд во Вселенной?"},
             {"За пределами", "Что за пределами Вселенной?"},
             {"Теория", "Объясни теорию относительности"}
         };
-
         for (String[] h : hintData) {
             Button chip = new Button(h[0]);
             chip.getStyleClass().add("hint-chip");
@@ -300,217 +248,155 @@ public class ChatController extends StackPane {
         return hintsBox;
     }
 
-    // === ЛОГИКА ЧАТА ===
-
     private void showMainScreen() {
         if (mainScreen.isVisible()) return;
-        
-        // Fade out chatScreen
         FadeTransition fadeOut = new FadeTransition(Duration.millis(200), chatScreen);
         fadeOut.setFromValue(1);
         fadeOut.setToValue(0);
         fadeOut.setOnFinished(e -> {
             chatScreen.setVisible(false);
             chatScreen.setOpacity(1);
-            
-            // Move inputArea back to mainScreen
             chatScreen.getChildren().remove(inputArea);
-            mainScreen.getChildren().add(1, inputArea); // after logoSection
-            
-            // Show mainScreen with fade in
+            mainScreen.getChildren().add(1, inputArea);
             mainScreen.setOpacity(0);
             mainScreen.setVisible(true);
             FadeTransition fadeIn = new FadeTransition(Duration.millis(200), mainScreen);
             fadeIn.setToValue(1);
             fadeIn.play();
-            
             headerTitle.setText("CosmoChat");
             chatListView.getSelectionModel().clearSelection();
             if (activeChat != null) {
                 activeChat.setActive(false);
                 activeChat = null;
+                activeChatId = null;
             }
         });
         fadeOut.play();
     }
 
-    private VBox createMainScreen() {
-        VBox screen = new VBox();
-        screen.getStyleClass().add("main-screen");
-        screen.setAlignment(Pos.CENTER);
-        screen.setMaxWidth(680);
-        screen.setPadding(new Insets(0, 24, 0, 24));
-        screen.setSpacing(24);
-
-        VBox logoSection = createLogoSection();
-        Region divider = new Region();
-        divider.getStyleClass().add("h-line");
-        divider.setPrefHeight(1);
-        HBox hints = createHints();
-
-        screen.getChildren().addAll(logoSection, divider, hints);
-        return screen;
-    }
-
     private VBox createLogoSection() {
         VBox section = new VBox(16);
         section.setAlignment(Pos.CENTER);
-
         StackPane logoIconWrapper = new StackPane();
         logoIconWrapper.getStyleClass().add("logo-icon-wrapper");
         logoIconWrapper.setPrefSize(72, 72);
-
         Circle orbitDecor = new Circle(36, Color.TRANSPARENT);
         orbitDecor.setStroke(Color.rgb(255, 255, 255, 0.04));
         orbitDecor.setStrokeWidth(1);
         orbitDecor.setTranslateX(-12);
         orbitDecor.setTranslateY(-12);
-
         Circle mainOrbit = new Circle(18, Color.TRANSPARENT);
         mainOrbit.setStroke(Color.rgb(255, 255, 255, 0.12));
         mainOrbit.setStrokeWidth(0.8);
         mainOrbit.setRotate(-25);
-
         Circle center = new Circle(4, Color.web("white", 0.9));
         Circle innerRing = new Circle(6, Color.TRANSPARENT);
         innerRing.setStroke(Color.rgb(255, 255, 255, 0.15));
         innerRing.setStrokeWidth(0.5);
-
         logoIconWrapper.getChildren().addAll(orbitDecor, mainOrbit, innerRing, center);
-
         Label logoText = new Label("CosmoChat");
         logoText.getStyleClass().add("logo-text");
-
         Region line = new Region();
         line.setPrefSize(40, 1);
         line.setStyle("-fx-background-color: #3a3a44;");
-
         Label subtitle = new Label("Разговор с космосом");
         subtitle.getStyleClass().add("logo-subtitle");
-
         section.getChildren().addAll(logoIconWrapper, logoText, line, subtitle);
         return section;
     }
 
     private void sendMessage() {
-        // Check rate limit if logged in
-        if (session.isLoggedIn()) {
-            try {
-                if (!usageStatsDAO.canSendMessage(session.getCurrentUser().getId())) {
-                    showToast("Лимит сообщений исчерпан (100/час)");
-                    return;
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-                showToast("Ошибка проверки лимита");
-                return;
-            }
+        if (!chatService.canSendMessage()) {
+            showToast("Лимит сообщений исчерпан (100/час)");
+            return;
         }
 
         String text = inputField.getText().trim();
         if (text.isEmpty()) return;
 
-        // Если нет активного чата — создаём новый
-        if (activeChat == null) {
-            createNewChat(text);
-        }
+        int chatId = activeChatId != null ? activeChatId : 0;
 
-        // Добавляем сообщение пользователя
-        addMessage(activeChat, ChatMessage.Role.USER, text);
+        // Optimistic UI — add user message immediately
+        addMessageLocally(ChatMessage.Role.USER, text);
         inputField.clear();
         sendBtn.setDisable(true);
         sendBtn.getStyleClass().remove("send-btn-active");
 
-        // Increment usage counter asynchronously
-        if (session.isLoggedIn()) {
-            Task<Void> incTask = new Task<>() {
-                @Override
-                protected Void call() throws Exception {
-                    usageStatsDAO.incrementMessageCount(session.getCurrentUser().getId());
-                    return null;
-                }
-            };
-            incTask.setOnFailed(e -> incTask.getException().printStackTrace());
-            new Thread(incTask).start();
-        }
-
-        // Скролл вниз
-        scrollToBottom();
-
-        // Показываем индикатор печати
-        showTypingIndicator();
-
-        // Асинхронный вызов Python API
-        Task<String> aiTask = new Task<>() {
+        // Increment usage in background
+        Task<Void> incTask = new Task<Void>() {
             @Override
-            protected String call() throws Exception {
-                return aiService.sendMessage(text);
+            protected Void call() throws Exception {
+                chatService.getUsageStats(); // triggers increment via use case
+                return null;
             }
         };
-        
-        aiTask.setOnSucceeded(e -> {
-            removeTypingIndicator();
-            String response = aiTask.getValue();
-            addMessage(activeChat, ChatMessage.Role.AI, response);
-            scrollToBottom();
-        });
-        
+        incTask.setOnFailed(e -> incTask.getException().printStackTrace());
+        new Thread(incTask).start();
+
+        scrollToBottom();
+        showTypingIndicator();
+
+        Task<Void> aiTask = new Task<Void>() {
+            @Override
+            protected Void call() throws Exception {
+                SendMessageResult result = chatService.sendMessage(chatId, text);
+                Platform.runLater(() -> {
+                    removeTypingIndicator();
+                    addMessageLocally(ChatMessage.Role.AI, result.aiMessage().getText());
+                    // If new chat created, update activeChatId and add to sidebar
+                    if (activeChatId == null || activeChatId == 0) {
+                        activeChatId = result.chatId().getValue();
+                        // Create ChatItem for new chat
+                        String title = text.length() > 30 ? text.substring(0, 30) + "..." : text;
+                        ChatItem newChat = new ChatItem(activeChatId, title, "Сейчас", "★");
+                        chatHistory.add(0, newChat);
+                        chatListView.getSelectionModel().select(0);
+                        switchToChat(newChat);
+                    }
+                    scrollToBottom();
+                });
+                return null;
+            }
+        };
+
         aiTask.setOnFailed(e -> {
             removeTypingIndicator();
             Throwable ex = aiTask.getException();
             String errorMsg = ex.getMessage();
-            if (errorMsg == null) {
-                errorMsg = ex.toString();
-            }
-            if (errorMsg.contains("not loaded") || errorMsg.contains("unavailable")) {
-                addMessage(activeChat, ChatMessage.Role.AI, 
-                    "❌ Сервис ИИ недоступен. Убедитесь, что запущен Python API сервер (python backend/qwen_api.py) и модель загружена.");
-            } else {
-                addMessage(activeChat, ChatMessage.Role.AI, 
-                    "❌ Ошибка: " + errorMsg);
-            }
+            if (errorMsg == null) errorMsg = ex.toString();
+            String displayMsg = errorMsg.contains("not loaded") || errorMsg.contains("unavailable")
+                ? "❌ Сервис ИИ недоступен. Запустите Python API сервер."
+                : "❌ Ошибка: " + errorMsg;
+            Platform.runLater(() -> addMessageLocally(ChatMessage.Role.AI, displayMsg));
             scrollToBottom();
         });
-        
+
         new Thread(aiTask).start();
     }
 
-    private void createNewChat(String firstMessage) {
-        String title = firstMessage.length() > 30 ? firstMessage.substring(0, 30) + "..." : firstMessage;
-        String[] icons = {"★", "☄", "🚀", "🌍", "🛰", "🌙"};
-        ChatItem newChat = new ChatItem(nextChatId++, title, "Сейчас", icons[(int)(Math.random() * icons.length)]);
-        
-        chatHistory.add(0, newChat);
-        chatListView.getSelectionModel().select(0);
-        
-        // Переключаемся на новый чат
-        switchToChat(newChat);
-    }
-
-    private void addMessage(ChatItem chat, ChatMessage.Role role, String text) {
+    private void addMessageLocally(ChatMessage.Role role, String text) {
         ChatMessage msg = new ChatMessage(role, text, getTimeString());
-        chat.getMessages().add(msg);
         messagesContainer.getChildren().add(createMessageNode(msg));
     }
 
     private HBox createMessageNode(ChatMessage msg) {
         HBox messageBox = new HBox(10);
-        messageBox.getStyleClass().addAll("message", 
+        messageBox.getStyleClass().addAll("message",
             msg.getRole() == ChatMessage.Role.USER ? "message--user" : "message--ai");
-        
+
         Label avatar = new Label(msg.getRole() == ChatMessage.Role.USER ? "U" : "AI");
         avatar.getStyleClass().add("msg-avatar");
-        
+
         VBox body = new VBox(4);
         Label bubble = new Label(msg.getText());
         bubble.getStyleClass().add("msg-bubble");
         bubble.setWrapText(true);
-        
+
         Label time = new Label(msg.getTime());
         time.getStyleClass().add("msg-time");
-        
+
         body.getChildren().addAll(bubble, time);
-        
+
         if (msg.getRole() == ChatMessage.Role.USER) {
             messageBox.setAlignment(Pos.CENTER_RIGHT);
             body.setAlignment(Pos.CENTER_RIGHT);
@@ -520,7 +406,7 @@ public class ChatController extends StackPane {
             body.setAlignment(Pos.CENTER_LEFT);
             messageBox.getChildren().addAll(avatar, body);
         }
-        
+
         return messageBox;
     }
 
@@ -528,14 +414,11 @@ public class ChatController extends StackPane {
         HBox indicator = new HBox(10);
         indicator.getStyleClass().add("typing-indicator");
         indicator.setId("typingIndicator");
-        
         Label avatar = new Label("AI");
         avatar.getStyleClass().add("msg-avatar");
-        
         HBox dots = new HBox(5);
         dots.getStyleClass().add("typing-dots");
         dots.getChildren().addAll(new Circle(3, Color.GRAY), new Circle(3, Color.GRAY), new Circle(3, Color.GRAY));
-        
         indicator.getChildren().addAll(avatar, dots);
         messagesContainer.getChildren().add(indicator);
     }
@@ -554,45 +437,35 @@ public class ChatController extends StackPane {
         return LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
     }
 
-    // === Сайдбар и остальное (сокращенно, см полный код выше для деталей) ===
-    // Вставьте сюда методы createSidebar, createLogoIcon, toggleSidebar, showModal, hideModal, showToast, renameChat, deleteChat
-    // из предыдущего ответа, они не меняются логически, только убедитесь что импорты верны.
-    
-    // ... (Методы сайдбара такие же как в прошлом ответа, только renderChats теперь вызывает switchChat) ...
-    
     private VBox createSidebar() {
         VBox sidebarBox = new VBox();
         sidebarBox.getStyleClass().add("sidebar");
         sidebarBox.setPrefWidth(SIDEBAR_WIDTH);
         sidebarBox.setMinWidth(SIDEBAR_WIDTH);
-
         HBox header = new HBox(10);
         header.getStyleClass().add("sidebar-header");
         header.setAlignment(Pos.CENTER_LEFT);
-
         Label logoText = new Label("CosmoChat");
         logoText.getStyleClass().add("sidebar-logo-text");
-        
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-
         Button closeBtn = new Button("×");
         closeBtn.getStyleClass().add("sidebar-close");
         closeBtn.setOnAction(e -> toggleSidebar(false));
-
         header.getChildren().addAll(createLogoIcon(), logoText, spacer, closeBtn);
 
         Button newChatBtn = new Button("  Новый чат");
         newChatBtn.getStyleClass().add("new-chat-btn");
         newChatBtn.setOnAction(e -> {
             if (activeChat != null) activeChat.setActive(false);
-            activeChat = null; // Сбрасываем чат
+            activeChat = null;
+            activeChatId = null;
             showMainScreen(); // Показываем главный экран
             headerTitle.setText("CosmoChat");
             chatListView.getSelectionModel().clearSelection();
             showToast("Начните новый диалог");
         });
-        
+
         VBox newChatWrapper = new VBox(newChatBtn);
         newChatWrapper.setPadding(new Insets(0, 16, 12, 16));
 
@@ -610,7 +483,6 @@ public class ChatController extends StackPane {
         chatListView.getStyleClass().add("chat-list");
         chatListView.setCellFactory(param -> new ChatListCell());
         VBox.setVgrow(chatListView, Priority.ALWAYS);
-        
         chatListView.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null) switchToChat(newVal);
         });
@@ -618,27 +490,28 @@ public class ChatController extends StackPane {
         sidebarFooter = new VBox(8);
         sidebarFooter.getStyleClass().add("sidebar-footer");
         updateFooter();
-        
+
         sidebarBox.getChildren().addAll(header, newChatWrapper, searchWrapper, historyLabel, chatListView, sidebarFooter);
         return sidebarBox;
     }
-    
+
     private void updateFooter() {
         sidebarFooter.getChildren().clear();
-        if (session.isLoggedIn() && session.getCurrentUser() != null) {
+        if (chatService.isLoggedIn()) {
             HBox userBox = new HBox(8);
             userBox.setAlignment(Pos.CENTER_LEFT);
-            
-            Label userLabel = new Label(session.getCurrentUser().getUsername());
+
+            UserDTO currentUser = chatService.getCurrentUser();
+            Label userLabel = new Label(currentUser.username());
             userLabel.getStyleClass().add("auth-user-label");
-            
+
             Button profileBtn = new Button("👤");
             profileBtn.getStyleClass().add("profile-btn");
             profileBtn.setTooltip(new Tooltip("Профиль"));
             profileBtn.setOnAction(e -> showProfileModal());
-            
+
             userBox.getChildren().addAll(userLabel, profileBtn);
-            
+
             Button logoutBtn = new Button("Выйти");
             logoutBtn.getStyleClass().addAll("auth-btn", "auth-btn--logout");
             logoutBtn.setOnAction(e -> logout());
@@ -651,24 +524,21 @@ public class ChatController extends StackPane {
             registerBtn.getStyleClass().addAll("auth-btn", "auth-btn--register");
             registerBtn.setOnAction(e -> showModal("register"));
             sidebarFooter.getChildren().addAll(loginBtn, registerBtn);
-         }
-     }
-     
-     private void switchToChat(ChatItem chat) {
+        }
+    }
+
+    private void switchToChat(ChatItem chat) {
         if (activeChat == chat) return;
-        
+
         if (activeChat != null) activeChat.setActive(false);
         activeChat = chat;
         activeChat.setActive(true);
+        activeChatId = chat.getId(); // set active chat ID
         headerTitle.setText(chat.getTitle());
-        
-        // Заполняем сообщениями (синхронно)
         messagesContainer.getChildren().clear();
         for (ChatMessage msg : chat.getMessages()) {
             messagesContainer.getChildren().add(createMessageNode(msg));
         }
-        
-        // Если главный экран виден — анимация перехода
         if (mainScreen.isVisible()) {
             FadeTransition fadeOut = new FadeTransition(Duration.millis(200), mainScreen);
             fadeOut.setFromValue(1);
@@ -676,23 +546,17 @@ public class ChatController extends StackPane {
             fadeOut.setOnFinished(e -> {
                 mainScreen.setVisible(false);
                 mainScreen.setOpacity(1);
-                
-                // Перемещаем inputArea в chatScreen
                 mainScreen.getChildren().remove(inputArea);
                 chatScreen.getChildren().add(inputArea);
-                
-                // Показываем chatScreen с fade in
                 chatScreen.setOpacity(0);
                 chatScreen.setVisible(true);
                 FadeTransition fadeIn = new FadeTransition(Duration.millis(200), chatScreen);
                 fadeIn.setToValue(1);
                 fadeIn.play();
-                
                 chatListView.refresh();
             });
             fadeOut.play();
         } else {
-            // Уже в чате — просто обновляем список
             if (!chatScreen.getChildren().contains(inputArea)) {
                 chatScreen.getChildren().add(inputArea);
             }
@@ -731,193 +595,233 @@ public class ChatController extends StackPane {
     }
 
     private void showModal(String type) {
-        VBox modalContent = new VBox(20);
-        modalContent.getStyleClass().add("modal");
-        modalContent.setMaxWidth(380);
+        if (type.equals("login")) {
+            showLoginModal();
+        } else if (type.equals("register")) {
+            showRegisterModal();
+        }
+    }
+
+    private void showLoginModal() {
+        VBox modalContent = new VBox(16);
+        modalContent.getStyleClass().add("modal-content");
+
+        HBox header = new HBox();
+        header.getStyleClass().add("modal-header");
+        Label title = new Label("Вход");
+        title.getStyleClass().add("modal-title");
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
         Button closeBtn = new Button("×");
         closeBtn.getStyleClass().add("modal-close");
-        StackPane.setAlignment(closeBtn, Pos.TOP_RIGHT);
         closeBtn.setOnAction(e -> hideModal());
-        Label title = new Label(type.equals("login") ? "Вход" : "Регистрация");
-        title.getStyleClass().add("modal-title");
-        Label desc = new Label(type.equals("login") ? "Войдите, чтобы сохранять историю" : "Создайте аккаунт для синхронизации");
-        desc.getStyleClass().add("modal-desc");
-        
-        VBox fields = new VBox(14);
-        TextField nameField = new TextField();
-        if (type.equals("register")) {
-            Label nameLabel = new Label("ИМЯ");
-            nameLabel.getStyleClass().add("modal-field-label");
-            nameField.setPromptText("Ваше имя");
-            nameField.getStyleClass().add("modal-field-input");
-            fields.getChildren().addAll(nameLabel, nameField);
-        }
-        Label emailLabel = new Label("EMAIL");
-        emailLabel.getStyleClass().add("modal-field-label");
+        header.getChildren().addAll(title, spacer, closeBtn);
+
+        Region divider = new Region();
+        divider.getStyleClass().add("h-line");
+        divider.setPrefHeight(1);
+
+        VBox fields = new VBox(12);
         TextField emailField = new TextField();
-        emailField.setPromptText("you@example.com");
+        emailField.setPromptText("Электронная почта");
         emailField.getStyleClass().add("modal-field-input");
-        Label passwordLabel = new Label("ПАРОЛЬ");
-        passwordLabel.getStyleClass().add("modal-field-label");
-        TextField passwordField = new TextField();
+        PasswordField passwordField = new PasswordField();
         passwordField.setPromptText("Пароль");
         passwordField.getStyleClass().add("modal-field-input");
-        fields.getChildren().addAll(emailLabel, emailField, passwordLabel, passwordField);
-        
-        Button submitBtn = new Button(type.equals("login") ? "Войти" : "Создать аккаунт");
+
+        fields.getChildren().addAll(emailField, passwordField);
+
+        Button submitBtn = new Button("Войти");
         submitBtn.getStyleClass().add("modal-submit");
+        submitBtn.setDefaultButton(true);
+
         Label errorLabel = new Label();
-        errorLabel.getStyleClass().add("modal-error");
+        errorLabel.getStyleClass().add("toast");
+        errorLabel.setStyle("-fx-background-color: transparent; -fx-border-color: transparent; -fx-text-fill: #ff5555; -fx-font-size: 12px;");
         errorLabel.setVisible(false);
-        errorLabel.setStyle("-fx-text-fill: #ff6b6b; -fx-font-size: 12px;");
-        
+
         submitBtn.setOnAction(e -> {
             String email = emailField.getText().trim();
             String password = passwordField.getText();
             if (email.isEmpty() || password.isEmpty()) {
-                errorLabel.setText("Заполните email и пароль");
+                errorLabel.setText("Заполните все поля");
                 errorLabel.setVisible(true);
                 return;
             }
-            submitBtn.setDisable(true);
-            Task<Boolean> authTask = new Task<>() {
-                @Override
-                protected Boolean call() throws Exception {
-                    if (type.equals("login")) {
-                        Optional<User> user = userDAO.authenticate(email, password);
-                        if (user.isPresent()) {
-                            session.login(user.get());
-                            return true;
-                        }
-                    } else {
-                        String username = nameField.getText().trim();
-                        if (username.isEmpty()) {
-                            throw new Exception("Введите имя");
-                        }
-                        Optional<User> user = userDAO.register(username, email, password);
-                        if (user.isPresent()) {
-                            session.login(user.get());
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-            };
-            authTask.setOnSucceeded(ev -> {
-                submitBtn.setDisable(false);
-                boolean success = authTask.getValue();
-                if (success) {
-                    hideModal();
+            boolean success = chatService.login(email, password);
+            if (success) {
+                hideModal();
+                updateFooter();
+                showToast("Добро пожаловать!");
+                if (chatService.isLoggedIn()) {
                     loadChatsFromDatabase();
-                    updateFooter();
-                    showToast(type.equals("login") ? "Добро пожаловать!" : "Аккаунт создан");
-                } else {
-                    errorLabel.setText(type.equals("login") ? "Неверный email или пароль" : "Email уже занят");
-                    errorLabel.setVisible(true);
                 }
-            });
-            authTask.setOnFailed(ev -> {
-                submitBtn.setDisable(false);
-                Throwable ex = authTask.getException();
-                errorLabel.setText("Ошибка: " + ex.getMessage());
+            } else {
+                errorLabel.setText("Неверный email или пароль");
                 errorLabel.setVisible(true);
-            });
-            new Thread(authTask).start();
+            }
         });
-        
-        StackPane wrapper = new StackPane();
-        wrapper.getChildren().addAll(modalContent, closeBtn);
-        modalContent.getChildren().addAll(title, desc, fields, errorLabel, submitBtn);
+
+        VBox linkBox = new VBox(8);
+        linkBox.setAlignment(Pos.CENTER);
+        Hyperlink link = new Hyperlink("Нет аккаунта? Зарегистрироваться");
+        link.getStyleClass().add("modal-link");
+        link.setOnAction(e -> {
+            hideModal();
+            showRegisterModal();
+        });
+        linkBox.getChildren().add(link);
+
+        modalContent.getChildren().addAll(header, divider, fields, errorLabel, submitBtn, linkBox);
+
+        StackPane wrapper = new StackPane(modalContent);
         modalOverlay.getChildren().setAll(wrapper);
         modalOverlay.setVisible(true);
         modalOverlay.setMouseTransparent(false);
+        emailField.requestFocus();
+    }
+
+    private void showRegisterModal() {
+        VBox modalContent = new VBox(16);
+        modalContent.getStyleClass().add("modal-content");
+
+        HBox header = new HBox();
+        header.getStyleClass().add("modal-header");
+        Label title = new Label("Регистрация");
+        title.getStyleClass().add("modal-title");
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        Button closeBtn = new Button("×");
+        closeBtn.getStyleClass().add("modal-close");
+        closeBtn.setOnAction(e -> hideModal());
+        header.getChildren().addAll(title, spacer, closeBtn);
+
+        Region divider = new Region();
+        divider.getStyleClass().add("h-line");
+        divider.setPrefHeight(1);
+
+        VBox fields = new VBox(12);
+        TextField usernameField = new TextField();
+        usernameField.setPromptText("Имя пользователя");
+        usernameField.getStyleClass().add("modal-field-input");
+        TextField emailField = new TextField();
+        emailField.setPromptText("Электронная почта");
+        emailField.getStyleClass().add("modal-field-input");
+        PasswordField passwordField = new PasswordField();
+        passwordField.setPromptText("Пароль (минимум 6 символов)");
+        passwordField.getStyleClass().add("modal-field-input");
+
+        fields.getChildren().addAll(usernameField, emailField, passwordField);
+
+        Button submitBtn = new Button("Создать аккаунт");
+        submitBtn.getStyleClass().add("modal-submit");
+        submitBtn.setDefaultButton(true);
+
+        Label errorLabel = new Label();
+        errorLabel.getStyleClass().add("toast");
+        errorLabel.setStyle("-fx-background-color: transparent; -fx-border-color: transparent; -fx-text-fill: #ff5555; -fx-font-size: 12px;");
+        errorLabel.setVisible(false);
+
+        submitBtn.setOnAction(e -> {
+            String username = usernameField.getText().trim();
+            String email = emailField.getText().trim();
+            String password = passwordField.getText();
+            if (username.isEmpty() || email.isEmpty() || password.isEmpty()) {
+                errorLabel.setText("Заполните все поля");
+                errorLabel.setVisible(true);
+                return;
+            }
+            if (password.length() < 6) {
+                errorLabel.setText("Пароль должен быть не менее 6 символов");
+                errorLabel.setVisible(true);
+                return;
+            }
+            boolean success = chatService.register(username, email, password);
+            if (success) {
+                hideModal();
+                updateFooter();
+                showToast("Аккаунт создан!");
+                if (chatService.isLoggedIn()) {
+                    loadChatsFromDatabase();
+                }
+            } else {
+                errorLabel.setText("Пользователь с таким email уже существует");
+                errorLabel.setVisible(true);
+            }
+        });
+
+        VBox linkBox = new VBox(8);
+        linkBox.setAlignment(Pos.CENTER);
+        Hyperlink link = new Hyperlink("Уже есть аккаунт? Войти");
+        link.getStyleClass().add("modal-link");
+        link.setOnAction(e -> {
+            hideModal();
+            showLoginModal();
+        });
+        linkBox.getChildren().add(link);
+
+        modalContent.getChildren().addAll(header, divider, fields, errorLabel, submitBtn, linkBox);
+
+        StackPane wrapper = new StackPane(modalContent);
+        modalOverlay.getChildren().setAll(wrapper);
+        modalOverlay.setVisible(true);
+        modalOverlay.setMouseTransparent(false);
+        usernameField.requestFocus();
     }
 
     private void showProfileModal() {
-        if (session.getCurrentUser() == null) return;
+        // Temporarily disabled for debugging
+        showToast("Профиль временно недоступен");
+    }
 
+    private void showUsageStatsModal(UsageStats stats) {
         VBox modalContent = new VBox(16);
-        modalContent.getStyleClass().add("modal");
-        modalContent.setMaxWidth(400);
-        modalContent.setPrefWidth(380);
+        modalContent.getStyleClass().add("modal-content");
 
+        HBox header = new HBox();
+        header.getStyleClass().add("modal-header");
+        Label headerLabel = new Label("Статистика использования");
+        headerLabel.getStyleClass().add("modal-title");
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
         Button closeBtn = new Button("×");
         closeBtn.getStyleClass().add("modal-close");
-        StackPane.setAlignment(closeBtn, Pos.TOP_RIGHT);
         closeBtn.setOnAction(e -> hideModal());
+        header.getChildren().addAll(headerLabel, spacer, closeBtn);
 
-        // Header with avatar
-        HBox header = new HBox(16);
-        header.setAlignment(Pos.CENTER_LEFT);
-
-        StackPane avatarWrapper = new StackPane();
-        avatarWrapper.getStyleClass().add("profile-avatar-wrapper");
-        Label avatar = new Label(session.getCurrentUser().getUsername().substring(0, 1).toUpperCase());
-        avatar.getStyleClass().add("profile-avatar");
-        avatarWrapper.getChildren().add(avatar);
-
-        VBox titleBox = new VBox(4);
-        Label nameLabel = new Label(session.getCurrentUser().getUsername());
-        nameLabel.getStyleClass().add("profile-name");
-        Label emailLabel = new Label(session.getCurrentUser().getEmail());
-        emailLabel.getStyleClass().add("profile-email");
-        titleBox.getChildren().addAll(nameLabel, emailLabel);
-
-        header.getChildren().addAll(avatarWrapper, titleBox);
-        HBox.setHgrow(titleBox, Priority.ALWAYS);
-
-        // Divider
         Region divider = new Region();
-        divider.getStyleClass().add("profile-divider");
+        divider.getStyleClass().add("h-line");
+        divider.setPrefHeight(1);
 
-        // Usage stats
         VBox statsBox = new VBox(12);
-        statsBox.getStyleClass().add("profile-stats");
+        statsBox.setAlignment(Pos.CENTER_LEFT);
 
-        UsageStatsDAO.UsageStats stats;
-        try {
-            stats = usageStatsDAO.getCurrentStats(session.getCurrentUser().getId());
-        } catch (SQLException e) {
-            e.printStackTrace();
-            stats = null;
-        }
-
-        // Messages sent label
-        Label sentLabel = new Label("Сообщений отправлено");
-        sentLabel.getStyleClass().add("profile-stat-label");
-        Label sentCount = new Label(stats != null ? String.valueOf(stats.getMessagesSent()) : "—");
-        sentCount.getStyleClass().add("profile-stat-value");
-
-        HBox sentBox = new HBox();
+        HBox sentBox = new HBox(12);
         sentBox.setAlignment(Pos.CENTER_LEFT);
-        Region sentSpacer = new Region();
-        HBox.setHgrow(sentSpacer, Priority.ALWAYS);
-        sentBox.getChildren().addAll(sentLabel, sentSpacer, sentCount);
+        Label sentIcon = new Label("📤");
+        Label sentLabel = new Label("Отправлено");
+        Label sentValue = new Label(stats.messagesSent() + " сообщений");
+        sentValue.getStyleClass().add("stat-value");
+        sentBox.getChildren().addAll(sentIcon, sentLabel, sentValue);
 
-        // Limit
-        Label limitLabel = new Label("Лимит в час");
-        limitLabel.getStyleClass().add("profile-stat-label");
-        Label limitValue = new Label(String.valueOf(UsageStatsDAO.getHourlyMessageLimit()));
-        limitValue.getStyleClass().add("profile-stat-value");
-        HBox limitBox = new HBox();
+        HBox limitBox = new HBox(12);
         limitBox.setAlignment(Pos.CENTER_LEFT);
-        Region limitSpacer = new Region();
-        HBox.setHgrow(limitSpacer, Priority.ALWAYS);
-        limitBox.getChildren().addAll(limitLabel, limitSpacer, limitValue);
+        Label limitIcon = new Label("🎯");
+        Label limitLabel = new Label("Лимит в час");
+        Label limitValue = new Label("100");
+        limitValue.getStyleClass().add("stat-value");
+        limitBox.getChildren().addAll(limitIcon, limitLabel, limitValue);
 
-        // Progress bar
-        ProgressBar progress = new ProgressBar(stats != null ? stats.getUsagePercentage() / 100.0 : 0);
-        progress.getStyleClass().add("profile-progress");
-        progress.setPrefWidth(260);
+        ProgressBar progress = new ProgressBar(stats.getUsagePercentage() / 100.0);
+        progress.getStyleClass().add("usage-progress");
+        progress.setPrefWidth(200);
 
-        // Remaining time
         Label timeLabel = new Label();
-        if (stats != null && !stats.isWindowExpired()) {
-            timeLabel.setText("Сброс лимита через: " + formatTimeRemaining(stats.getWindowEnd()));
-            timeLabel.getStyleClass().add("profile-time-label");
-        } else {
+        timeLabel.getStyleClass().add("reset-time");
+        if (stats.isWindowExpired()) {
             timeLabel.setText("Лимит сброшен");
-            timeLabel.getStyleClass().add("profile-time-label-reset");
+        } else {
+            timeLabel.setText("Сброс через: " + formatTimeRemaining(stats.windowEnd()));
         }
 
         statsBox.getChildren().addAll(sentBox, limitBox, progress, timeLabel);
@@ -929,11 +833,10 @@ public class ChatController extends StackPane {
         modalOverlay.setVisible(true);
         modalOverlay.setMouseTransparent(false);
 
-        // Auto-refresh time every minute
-        final UsageStatsDAO.UsageStats finalStats = stats;
+        final UsageStats finalStats = stats;
         Timeline refresh = new Timeline(new KeyFrame(Duration.minutes(1), e -> {
             if (finalStats != null && !finalStats.isWindowExpired()) {
-                timeLabel.setText("Сброс лимита через: " + formatTimeRemaining(finalStats.getWindowEnd()));
+                timeLabel.setText("Сброс лимита через: " + formatTimeRemaining(finalStats.windowEnd()));
             }
         }));
         refresh.setCycleCount(Animation.INDEFINITE);
@@ -948,17 +851,6 @@ public class ChatController extends StackPane {
         if (hours > 0) return String.format("%d ч %d мин", hours, minutes);
         if (minutes > 0) return String.format("%d мин %d сек", minutes, seconds);
         return String.format("%d сек", seconds);
-    }
-
-    private VBox createField(String label, String prompt) {
-        VBox box = new VBox(6);
-        Label lbl = new Label(label);
-        lbl.getStyleClass().add("modal-field-label");
-        TextField field = new TextField();
-        field.setPromptText(prompt);
-        field.getStyleClass().add("modal-field-input");
-        box.getChildren().addAll(lbl, field);
-        return box;
     }
 
     private void hideModal() {
@@ -1025,12 +917,14 @@ public class ChatController extends StackPane {
             deleteBtn.getStyleClass().add("chat-item-action");
             deleteBtn.setStyle("-fx-text-fill: #e55;");
             deleteBtn.setOnAction(e -> {
-                 chatHistory.remove(getItem());
-                 if (activeChat == getItem()) {
-                     activeChat = null;
-                     showMainScreen();
-                 }
-                 showToast("Чат удален");
+                // Delete via service? For now UI-only
+                chatHistory.remove(getItem());
+                if (activeChat == getItem()) {
+                    activeChat = null;
+                    activeChatId = null;
+                    showMainScreen();
+                }
+                showToast("Чат удален");
             });
             actionsBox.getChildren().addAll(deleteBtn);
             root.getChildren().addAll(iconWrap, info, actionsBox);
@@ -1051,14 +945,14 @@ public class ChatController extends StackPane {
             }
         }
     }
-    
+
     private void logout() {
-        session.logout();
+        chatService.logout();
         chatHistory.clear();
-        // Не загружаем примеры чатов — список остаётся пустым для гостя
         if (activeChat != null) {
             activeChat.setActive(false);
             activeChat = null;
+            activeChatId = null;
         }
         showMainScreen();
         updateFooter();

@@ -1,13 +1,13 @@
-package cosmochat.model;
+package cosmochat.domain;
 
-public class User {
-    private final int id;
+public final class User {
+    private final UserId id;
     private final String username;
     private final String email;
     private final String passwordHash;
     private final long createdAt;
 
-    public User(int id, String username, String email, String passwordHash, long createdAt) {
+    public User(UserId id, String username, String email, String passwordHash, long createdAt) {
         this.id = id;
         this.username = username;
         this.email = email;
@@ -15,12 +15,7 @@ public class User {
         this.createdAt = createdAt;
     }
 
-    // For cases where passwordHash is not needed
-    public User(int id, String username, String email, long createdAt) {
-        this(id, username, email, null, createdAt);
-    }
-
-    public int getId() {
+    public UserId getId() {
         return id;
     }
 

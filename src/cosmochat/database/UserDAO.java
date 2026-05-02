@@ -50,16 +50,21 @@ public class UserDAO {
     }
 
     public Optional<User> authenticate(String email, String password) throws Exception {
-        String sql = "SELECT id, username, email, password_hash FROM users WHERE email = ?";
+        String sql = "SELECT id, username, email, password_hash, created_at FROM users WHERE email = ?";
         try (PreparedStatement stmt = dbManager.getConnection().prepareStatement(sql)) {
             stmt.setString(1, email);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    String storedHash = rs.getString("password_hash");
+                    User user = mapResultSetToUser(rs);
+                    String storedHash = user.getPasswordHash();
                     if (PasswordHasher.verifyPassword(password, storedHash)) {
-                        int id = rs.getInt("id");
-                        String username = rs.getString("username");
-                        return Optional.of(new User(id, username, email, System.currentTimeMillis()));
+                        // Return user without password hash for session
+                        return Optional.of(new User(
+                            user.getId(),
+                            user.getUsername(),
+                            user.getEmail(),
+                            user.getCreatedAt()
+                        ));
                     }
                 }
             }
@@ -67,21 +72,38 @@ public class UserDAO {
         return Optional.empty();
     }
 
+    public Optional<User> findByEmail(String email) throws SQLException {
+        String sql = "SELECT id, username, email, password_hash, created_at FROM users WHERE email = ?";
+        try (PreparedStatement stmt = dbManager.getConnection().prepareStatement(sql)) {
+            stmt.setString(1, email);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(mapResultSetToUser(rs));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
     public User getUserById(int userId) throws SQLException {
-        String sql = "SELECT id, username, email FROM users WHERE id = ?";
+        String sql = "SELECT id, username, email, password_hash, created_at FROM users WHERE id = ?";
         try (PreparedStatement stmt = dbManager.getConnection().prepareStatement(sql)) {
             stmt.setInt(1, userId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return new User(
-                        rs.getInt("id"),
-                        rs.getString("username"),
-                        rs.getString("email"),
-                        System.currentTimeMillis()
-                    );
+                    return mapResultSetToUser(rs);
                 }
             }
         }
         return null;
+    }
+
+    private User mapResultSetToUser(ResultSet rs) throws SQLException {
+        int id = rs.getInt("id");
+        String username = rs.getString("username");
+        String email = rs.getString("email");
+        String passwordHash = rs.getString("password_hash");
+        long createdAt = rs.getTimestamp("created_at").getTime();
+        return new User(id, username, email, passwordHash, createdAt);
     }
 }

@@ -17,6 +17,8 @@ import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 
+import cosmochat.infrastructure.CompositionRoot;
+
 public class CosmoChatApp extends Application {
     private double xOffset = 0, yOffset = 0;
     private double prevX, prevY, prevW, prevH;
@@ -29,13 +31,16 @@ public class CosmoChatApp extends Application {
 
         HBox titleBar = createTitleBar(primaryStage);
         StarfieldCanvas starfield = new StarfieldCanvas();
-        ChatController controller = new ChatController();
+
+        // Use Composition Root to create ChatController with DI
+        CompositionRoot.ChatControllerFactory factory = CompositionRoot.createChatControllerFactory();
+        ChatController controller = factory.createChatController();
 
         StackPane contentStack = new StackPane();
         starfield.widthProperty().bind(contentStack.widthProperty());
         starfield.heightProperty().bind(contentStack.heightProperty());
         contentStack.getChildren().addAll(starfield, controller);
-        
+
         VBox.setVgrow(contentStack, Priority.ALWAYS);
         root.getChildren().addAll(titleBar, contentStack);
 
@@ -54,8 +59,6 @@ public class CosmoChatApp extends Application {
 
         primaryStage.show();
         starfield.startAnimation();
-        
-        // Обработка закрытия
         primaryStage.setOnCloseRequest(e -> starfield.stopAnimation());
     }
 
@@ -65,19 +68,15 @@ public class CosmoChatApp extends Application {
         titleBar.setAlignment(Pos.CENTER_LEFT);
         titleBar.setPadding(new Insets(0, 0, 0, 16));
         titleBar.setPrefHeight(40);
-
         Label title = new Label("CosmoChat");
         title.getStyleClass().add("title-bar-label");
-
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-
         HBox buttons = new HBox();
         buttons.setAlignment(Pos.CENTER_RIGHT);
         Button btnMinimize = createWindowButton("—", "title-btn-min");
         Button btnMaximize = createWindowButton("□", "title-btn-max");
         Button btnClose = createWindowButton("×", "title-btn-close");
-
         btnMinimize.setOnAction(e -> stage.setIconified(true));
         btnMaximize.setOnAction(e -> {
             if (isCustomMaximized) {
@@ -94,16 +93,11 @@ public class CosmoChatApp extends Application {
             }
         });
         btnClose.setOnAction(e -> stage.close());
-
         buttons.getChildren().addAll(btnMinimize, btnMaximize, btnClose);
         titleBar.getChildren().addAll(title, spacer, buttons);
-
         titleBar.setOnMousePressed(event -> { if (!isCustomMaximized) { xOffset = event.getSceneX(); yOffset = event.getSceneY(); } });
-        titleBar.setOnMouseDragged(event -> {
-            if (!isCustomMaximized) { stage.setX(event.getScreenX() - xOffset); stage.setY(event.getScreenY() - yOffset); }
-        });
+        titleBar.setOnMouseDragged(event -> { if (!isCustomMaximized) { stage.setX(event.getScreenX() - xOffset); stage.setY(event.getScreenY() - yOffset); } });
         titleBar.setOnMouseClicked(event -> { if (event.getClickCount() == 2) btnMaximize.fire(); });
-
         return titleBar;
     }
 
