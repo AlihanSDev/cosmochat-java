@@ -18,6 +18,7 @@ import javafx.util.Duration;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import javafx.concurrent.Task;
 
 public class ChatController extends StackPane {
     private static final double SIDEBAR_WIDTH = 280;
@@ -25,7 +26,10 @@ public class ChatController extends StackPane {
     private ChatItem activeChat;
     private int nextChatId = 1;
     private boolean sidebarOpen = true;
-
+    
+    // AI Service
+    private final AiService aiService = new AiService();
+    
     // UI Components
     private VBox sidebar;
     private ListView<ChatItem> chatListView;
@@ -350,16 +354,42 @@ public class ChatController extends StackPane {
         // Скролл вниз
         scrollToBottom();
 
-        // Симуляция ответа ИИ
+        // Показываем индикатор печати
         showTypingIndicator();
-        PauseTransition delay = new PauseTransition(Duration.seconds(1));
-        delay.setOnFinished(e -> {
+
+        // Асинхронный вызов Python API
+        Task<String> aiTask = new Task<>() {
+            @Override
+            protected String call() throws Exception {
+                return aiService.sendMessage(text);
+            }
+        };
+        
+        aiTask.setOnSucceeded(e -> {
             removeTypingIndicator();
-            String response = getAiResponse(text);
+            String response = aiTask.getValue();
             addMessage(activeChat, ChatMessage.Role.AI, response);
             scrollToBottom();
         });
-        delay.play();
+        
+        aiTask.setOnFailed(e -> {
+            removeTypingIndicator();
+            Throwable ex = aiTask.getException();
+            String errorMsg = ex.getMessage();
+            if (errorMsg == null) {
+                errorMsg = ex.toString();
+            }
+            if (errorMsg.contains("not loaded") || errorMsg.contains("unavailable")) {
+                addMessage(activeChat, ChatMessage.Role.AI, 
+                    "❌ Сервис ИИ недоступен. Убедитесь, что запущен Python API сервер (python backend/qwen_api.py) и модель загружена.");
+            } else {
+                addMessage(activeChat, ChatMessage.Role.AI, 
+                    "❌ Ошибка: " + errorMsg);
+            }
+            scrollToBottom();
+        });
+        
+        new Thread(aiTask).start();
     }
 
     private void createNewChat(String firstMessage) {
@@ -593,22 +623,6 @@ public class ChatController extends StackPane {
         }
         trans.play();
     }
-
-    // AI Logic
-    private String getAiResponse(String input) {
-        String lower = input.toLowerCase();
-        if (lower.contains("чёрн") || lower.contains("black hole")) {
-            return "Чёрная дыра — это область пространства-времени, гравитационное притяжение которой настолько велико, что даже свет не может её покинуть. Граница, за которую невозможно вернуться, называется горизонтом событий.";
-        }
-        if (lower.contains("звёзд") || lower.contains("star")) {
-            return "По текущим оценкам астрофизиков, в наблюдаемой Вселенной существует примерно 200 миллиардов триллионов звёзд (2 × 10²³). Это число получается из расчёта количества галактик и среднего числа звёзд в них.";
-        }
-        return "Интересный вопрос. Космос — это бесконечный источник удивительных фактов и открытий. Каждое исследование приближает нас к пониманию фундаментальных законов природы. Попробуйте спросить про чёрные дыры или количество звёзд!";
-    }
-    
-    // ... showModal, hideModal, showToast, ChatListCell, animateEntrance (как в предыдущем ответе) ...
-    // Для краткости, я опущу копипасту методов, которые не изменились (showModal, hideModal, showToast, ChatListCell, animateEntrance),
-    // но в реальном файле они должны быть.
 
     private void showModal(String type) {
         VBox modalContent = new VBox(20);

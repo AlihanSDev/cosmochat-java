@@ -1,59 +1,44 @@
-# Build output
+# Build
 build/
 out/
 target/
-bin/
-.classpath
-.project
-.settings/
+*.class
+
+# Java
+.hg/
+.svn/
+.CVS/
 
 # IDE
-.vscode/
 .idea/
+.vscode/
 *.iml
+*.ipr
+*.iws
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+*.egg
+
+# Backend models (large files)
+backend/models/*.gguf
+backend/models/*.bin
 
 # OS
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
 
 # Logs
 *.log
 
-# JavaFX
-javafx/
-lib/
-
-# Maven/Gradle
-pom.xml
-pom.xml.asc
-*.gradle
-.gradle/
-
-# Test files
-test.txt
-
-# Other
-*.jar
-*.war
-*.ear
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-htmlcov/
-*.egg-info/
-dist/
-build/
-models/
-*.gguf
+# Temporary
+tmp/
+temp/

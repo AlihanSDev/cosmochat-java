@@ -12,7 +12,13 @@
 
 import sys
 import os
+import io
 from pathlib import Path
+
+# Fix Windows console encoding for Unicode
+if os.name == 'nt':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 try:
     from llama_cpp import Llama
@@ -33,7 +39,7 @@ except ImportError:
 
 
 # Конфигурация
-MODEL_PATH = "models/qwen2.5-coder/qwen2.5-coder-1.5b-instruct-q8_0.gguf"
+MODEL_PATH = "models/qwen2.5-coder/qwen2.5-coder-1.5b-instruct-q2_k.gguf"
 HOST = "127.0.0.1"
 PORT = 5001
 MAX_TOKENS = 512
