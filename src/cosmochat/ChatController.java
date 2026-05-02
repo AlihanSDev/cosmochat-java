@@ -93,9 +93,8 @@ public class ChatController extends StackPane {
     private void initializeData() {
         if (session.isLoggedIn() && session.getCurrentUser() != null) {
             loadChatsFromDatabase();
-        } else {
-            loadSampleChats();
         }
+        // Если пользователь не авторизован — список чатов остаётся пустым
         // activeChat остаётся null, показываем главный экран
     }
     
@@ -1056,7 +1055,7 @@ public class ChatController extends StackPane {
     private void logout() {
         session.logout();
         chatHistory.clear();
-        loadSampleChats();
+        // Не загружаем примеры чатов — список остаётся пустым для гостя
         if (activeChat != null) {
             activeChat.setActive(false);
             activeChat = null;
@@ -1064,4 +1063,5 @@ public class ChatController extends StackPane {
         showMainScreen();
         updateFooter();
         showToast("Вы вышли из аккаунта");
-    }}
+    }
+}
