@@ -594,187 +594,127 @@ public class ChatController extends StackPane {
         trans.play();
     }
 
-    private void showModal(String type) {
-        if (type.equals("login")) {
-            showLoginModal();
-        } else if (type.equals("register")) {
-            showRegisterModal();
-        }
-    }
-
-    private void showLoginModal() {
-        VBox modalContent = new VBox(16);
-        modalContent.getStyleClass().add("modal-content");
-
-        HBox header = new HBox();
-        header.getStyleClass().add("modal-header");
-        Label title = new Label("Вход");
-        title.getStyleClass().add("modal-title");
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        Button closeBtn = new Button("×");
-        closeBtn.getStyleClass().add("modal-close");
-        closeBtn.setOnAction(e -> hideModal());
-        header.getChildren().addAll(title, spacer, closeBtn);
-
-        Region divider = new Region();
-        divider.getStyleClass().add("h-line");
-        divider.setPrefHeight(1);
-
-        VBox fields = new VBox(12);
-        TextField emailField = new TextField();
-        emailField.setPromptText("Электронная почта");
-        emailField.getStyleClass().add("modal-field-input");
-        PasswordField passwordField = new PasswordField();
-        passwordField.setPromptText("Пароль");
-        passwordField.getStyleClass().add("modal-field-input");
-
-        fields.getChildren().addAll(emailField, passwordField);
-
-        Button submitBtn = new Button("Войти");
-        submitBtn.getStyleClass().add("modal-submit");
-        submitBtn.setDefaultButton(true);
-
-        Label errorLabel = new Label();
-        errorLabel.getStyleClass().add("toast");
-        errorLabel.setStyle("-fx-background-color: transparent; -fx-border-color: transparent; -fx-text-fill: #ff5555; -fx-font-size: 12px;");
-        errorLabel.setVisible(false);
-
-        submitBtn.setOnAction(e -> {
-            String email = emailField.getText().trim();
-            String password = passwordField.getText();
-            if (email.isEmpty() || password.isEmpty()) {
-                errorLabel.setText("Заполните все поля");
-                errorLabel.setVisible(true);
-                return;
-            }
-            boolean success = chatService.login(email, password);
-            if (success) {
-                hideModal();
-                updateFooter();
-                showToast("Добро пожаловать!");
-                if (chatService.isLoggedIn()) {
-                    loadChatsFromDatabase();
-                }
-            } else {
-                errorLabel.setText("Неверный email или пароль");
-                errorLabel.setVisible(true);
-            }
-        });
-
-        VBox linkBox = new VBox(8);
-        linkBox.setAlignment(Pos.CENTER);
-        Hyperlink link = new Hyperlink("Нет аккаунта? Зарегистрироваться");
-        link.getStyleClass().add("modal-link");
-        link.setOnAction(e -> {
-            hideModal();
-            showRegisterModal();
-        });
-        linkBox.getChildren().add(link);
-
-        modalContent.getChildren().addAll(header, divider, fields, errorLabel, submitBtn, linkBox);
-
-        StackPane wrapper = new StackPane(modalContent);
-        modalOverlay.getChildren().setAll(wrapper);
-        modalOverlay.setVisible(true);
-        modalOverlay.setMouseTransparent(false);
-        emailField.requestFocus();
-    }
-
-    private void showRegisterModal() {
-        VBox modalContent = new VBox(16);
-        modalContent.getStyleClass().add("modal-content");
-
-        HBox header = new HBox();
-        header.getStyleClass().add("modal-header");
-        Label title = new Label("Регистрация");
-        title.getStyleClass().add("modal-title");
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        Button closeBtn = new Button("×");
-        closeBtn.getStyleClass().add("modal-close");
-        closeBtn.setOnAction(e -> hideModal());
-        header.getChildren().addAll(title, spacer, closeBtn);
-
-        Region divider = new Region();
-        divider.getStyleClass().add("h-line");
-        divider.setPrefHeight(1);
-
-        VBox fields = new VBox(12);
-        TextField usernameField = new TextField();
-        usernameField.setPromptText("Имя пользователя");
-        usernameField.getStyleClass().add("modal-field-input");
-        TextField emailField = new TextField();
-        emailField.setPromptText("Электронная почта");
-        emailField.getStyleClass().add("modal-field-input");
-        PasswordField passwordField = new PasswordField();
-        passwordField.setPromptText("Пароль (минимум 6 символов)");
-        passwordField.getStyleClass().add("modal-field-input");
-
-        fields.getChildren().addAll(usernameField, emailField, passwordField);
-
-        Button submitBtn = new Button("Создать аккаунт");
-        submitBtn.getStyleClass().add("modal-submit");
-        submitBtn.setDefaultButton(true);
-
-        Label errorLabel = new Label();
-        errorLabel.getStyleClass().add("toast");
-        errorLabel.setStyle("-fx-background-color: transparent; -fx-border-color: transparent; -fx-text-fill: #ff5555; -fx-font-size: 12px;");
-        errorLabel.setVisible(false);
-
-        submitBtn.setOnAction(e -> {
-            String username = usernameField.getText().trim();
-            String email = emailField.getText().trim();
-            String password = passwordField.getText();
-            if (username.isEmpty() || email.isEmpty() || password.isEmpty()) {
-                errorLabel.setText("Заполните все поля");
-                errorLabel.setVisible(true);
-                return;
-            }
-            if (password.length() < 6) {
-                errorLabel.setText("Пароль должен быть не менее 6 символов");
-                errorLabel.setVisible(true);
-                return;
-            }
-            boolean success = chatService.register(username, email, password);
-            if (success) {
-                hideModal();
-                updateFooter();
-                showToast("Аккаунт создан!");
-                if (chatService.isLoggedIn()) {
-                    loadChatsFromDatabase();
-                }
-            } else {
-                errorLabel.setText("Пользователь с таким email уже существует");
-                errorLabel.setVisible(true);
-            }
-        });
-
-        VBox linkBox = new VBox(8);
-        linkBox.setAlignment(Pos.CENTER);
-        Hyperlink link = new Hyperlink("Уже есть аккаунт? Войти");
-        link.getStyleClass().add("modal-link");
-        link.setOnAction(e -> {
-            hideModal();
-            showLoginModal();
-        });
-        linkBox.getChildren().add(link);
-
-        modalContent.getChildren().addAll(header, divider, fields, errorLabel, submitBtn, linkBox);
-
-        StackPane wrapper = new StackPane(modalContent);
-        modalOverlay.getChildren().setAll(wrapper);
-        modalOverlay.setVisible(true);
-        modalOverlay.setMouseTransparent(false);
-        usernameField.requestFocus();
-    }
-
-    private void showProfileModal() {
-        // Temporarily disabled for debugging
-        showToast("Профиль временно недоступен");
-    }
-
-    private void showUsageStatsModal(UsageStats stats) {
+     private void showModal(String type) {
+         VBox modalContent = new VBox(20);
+         modalContent.getStyleClass().add("modal");
+         modalContent.setMaxWidth(380);
+         
+         Button closeBtn = new Button("×");
+         closeBtn.getStyleClass().add("modal-close");
+         StackPane.setAlignment(closeBtn, Pos.TOP_RIGHT);
+         closeBtn.setOnAction(e -> hideModal());
+         
+         Label title = new Label(type.equals("login") ? "Вход" : "Регистрация");
+         title.getStyleClass().add("modal-title");
+         Label desc = new Label(type.equals("login") ? "Войдите, чтобы сохранять историю" : "Создайте аккаунт для синхронизации");
+         desc.getStyleClass().add("modal-desc");
+         
+         VBox fields = new VBox(14);
+         TextField nameField = new TextField();
+         if (type.equals("register")) {
+             Label nameLabel = new Label("ИМЯ");
+             nameLabel.getStyleClass().add("modal-field-label");
+             nameField.setPromptText("Ваше имя");
+             nameField.getStyleClass().add("modal-field-input");
+             fields.getChildren().addAll(nameLabel, nameField);
+         }
+         
+         Label emailLabel = new Label("EMAIL");
+         emailLabel.getStyleClass().add("modal-field-label");
+         TextField emailField = new TextField();
+         emailField.setPromptText("you@example.com");
+         emailField.getStyleClass().add("modal-field-input");
+         
+         Label passwordLabel = new Label("ПАРОЛЬ");
+         passwordLabel.getStyleClass().add("modal-field-label");
+         TextField passwordField = new TextField();
+         passwordField.setPromptText("Пароль");
+         passwordField.getStyleClass().add("modal-field-input");
+         
+         fields.getChildren().addAll(emailLabel, emailField, passwordLabel, passwordField);
+         
+         Button submitBtn = new Button(type.equals("login") ? "Войти" : "Создать аккаунт");
+         submitBtn.getStyleClass().add("modal-submit");
+         
+         Label errorLabel = new Label();
+         errorLabel.setStyle("-fx-text-fill: #ff6b6b; -fx-font-size: 12px;");
+         errorLabel.setVisible(false);
+         
+         submitBtn.setOnAction(e -> {
+             String email = emailField.getText().trim();
+             String password = passwordField.getText();
+             if (email.isEmpty() || password.isEmpty()) {
+                 errorLabel.setText("Заполните email и пароль");
+                 errorLabel.setVisible(true);
+                 return;
+             }
+             submitBtn.setDisable(true);
+             Task<Boolean> authTask = new Task<>() {
+                 @Override
+                 protected Boolean call() throws Exception {
+                     if (type.equals("login")) {
+                         return chatService.login(email, password);
+                     } else {
+                         String username = nameField.getText().trim();
+                         if (username.isEmpty()) {
+                             throw new Exception("Введите имя");
+                         }
+                         return chatService.register(username, email, password);
+                     }
+                 }
+             };
+             authTask.setOnSucceeded(ev -> {
+                 submitBtn.setDisable(false);
+                 boolean success = authTask.getValue();
+                 if (success) {
+                     hideModal();
+                     loadChatsFromDatabase();
+                     updateFooter();
+                     showToast(type.equals("login") ? "Добро пожаловать!" : "Аккаунт создан");
+                 } else {
+                     errorLabel.setText(type.equals("login") ? "Неверный email или пароль" : "Email уже занят");
+                     errorLabel.setVisible(true);
+                 }
+             });
+             authTask.setOnFailed(ev -> {
+                 submitBtn.setDisable(false);
+                 Throwable ex = authTask.getException();
+                 errorLabel.setText("Ошибка: " + ex.getMessage());
+                 errorLabel.setVisible(true);
+             });
+             new Thread(authTask).start();
+         });
+         
+         StackPane wrapper = new StackPane();
+         wrapper.getChildren().addAll(modalContent, closeBtn);
+         modalContent.getChildren().addAll(title, desc, fields, errorLabel, submitBtn);
+         modalOverlay.getChildren().setAll(wrapper);
+         modalOverlay.setVisible(true);
+         modalOverlay.setMouseTransparent(false);
+     }
+ 
+     private VBox createField(String label, String prompt) {
+         VBox box = new VBox(6);
+         Label lbl = new Label(label);
+         lbl.getStyleClass().add("modal-field-label");
+         TextField field = new TextField();
+         field.setPromptText(prompt);
+         field.getStyleClass().add("modal-field-input");
+         box.getChildren().addAll(lbl, field);
+         return box;
+      }
+  
+      private void hideModal() {
+          modalOverlay.setVisible(false);
+          modalOverlay.setMouseTransparent(true);
+      }
+  
+      private void showProfileModal() {
+          // Temporarily disabled for debugging
+          showToast("Профиль временно недоступен");
+      }
+  
+      private void showUsageStatsModal(UsageStats stats) {
         VBox modalContent = new VBox(16);
         modalContent.getStyleClass().add("modal-content");
 
@@ -851,14 +791,9 @@ public class ChatController extends StackPane {
         if (hours > 0) return String.format("%d ч %d мин", hours, minutes);
         if (minutes > 0) return String.format("%d мин %d сек", minutes, seconds);
         return String.format("%d сек", seconds);
-    }
+     }
 
-    private void hideModal() {
-        modalOverlay.setVisible(false);
-        modalOverlay.setMouseTransparent(true);
-    }
-
-    private void showToast(String message) {
+     private void showToast(String message) {
         HBox toast = new HBox(10);
         toast.getStyleClass().add("toast");
         toast.setAlignment(Pos.CENTER_LEFT);
