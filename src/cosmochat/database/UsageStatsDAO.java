@@ -6,6 +6,9 @@ import java.time.format.DateTimeFormatter;
 
 public class UsageStatsDAO {
     private static final int HOURLY_MESSAGE_LIMIT = 100;
+    // SQLite CURRENT_TIMESTAMP format: "yyyy-MM-dd HH:mm:ss"
+    private static final DateTimeFormatter SQLITE_DATETIME_FORMATTER = 
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private final DatabaseManager dbManager;
 
     public UsageStatsDAO() throws SQLException {
@@ -23,7 +26,7 @@ public class UsageStatsDAO {
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     String windowStartStr = rs.getString("hour_window_start");
-                    LocalDateTime windowStart = LocalDateTime.parse(windowStartStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+                    LocalDateTime windowStart = LocalDateTime.parse(windowStartStr, SQLITE_DATETIME_FORMATTER);
                     int messagesSent = rs.getInt("messages_sent");
                     return new UsageStats(userId, messagesSent, windowStart);
                 }
@@ -56,7 +59,7 @@ public class UsageStatsDAO {
         }
         String update = "UPDATE user_usage SET messages_sent = messages_sent + 1, hour_window_start = ? WHERE user_id = ?";
         try (PreparedStatement stmt = dbManager.getConnection().prepareStatement(update)) {
-            stmt.setString(1, LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+            stmt.setString(1, LocalDateTime.now().format(SQLITE_DATETIME_FORMATTER));
             stmt.setInt(2, userId);
             stmt.executeUpdate();
         }
