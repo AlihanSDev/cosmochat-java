@@ -419,111 +419,52 @@ public class ChatController extends StackPane {
 
 
 
-     private void addMessageLocally(ChatMessage.Role role, String text) {
-         // Auto-detect and extract HTML content for AI messages
-         HtmlExtractResult htmlResult = extractHtmlIfPresent(text, role == ChatMessage.Role.AI);
-         boolean isHtml = htmlResult.isHtml;
-         String displayText = htmlResult.extractedText;
-         
-         // Store original full text in ChatMessage, but display extracted
-         ChatMessage msg = new ChatMessage(role, displayText, getTimeString());
-         messagesContainer.getChildren().add(createMessageNode(msg, isHtml));
-         if (activeChat != null) {
-             activeChat.getMessages().add(msg);
-         }
-     }
-     
-     /**
-      * Result of HTML extraction: whether it's HTML and what text to display
-      */
-     private static class HtmlExtractResult {
-         final boolean isHtml;
-         final String extractedText;
-         HtmlExtractResult(boolean isHtml, String extractedText) {
-             this.isHtml = isHtml;
-             this.extractedText = extractedText;
-         }
-     }
-     
-     /**
-      * Extracts HTML code from text if present (handles markdown code blocks).
-      * Returns the HTML to display and a flag indicating if it's HTML.
-      */
-     private HtmlExtractResult extractHtmlIfPresent(String text, boolean isAiMessage) {
-         if (!isAiMessage) {
-             return new HtmlExtractResult(false, text);
-         }
-         
-         String trimmed = text.trim();
-         
-         // Try to find HTML code block (```html ... ``` or just ```...```)
-         String extractedHtml = null;
-         
-         // Pattern for ```html ... ```
-         if (trimmed.startsWith("```html")) {
-             int endIdx = trimmed.indexOf("```", 7);
-             if (endIdx != -1) {
-                 extractedHtml = trimmed.substring(7, endIdx).trim();
-             }
-         }
-         // Pattern for ``` ... ``` (any language)
-         else if (trimmed.startsWith("```")) {
-             int firstNewline = trimmed.indexOf('\n');
-             if (firstNewline != -1) {
-                 int endIdx = trimmed.indexOf("```", firstNewline);
-                 if (endIdx != -1) {
-                     extractedHtml = trimmed.substring(firstNewline + 1, endIdx).trim();
-                 }
-             }
-         }
-         
-         // If we extracted something, check if it's actually HTML
-         if (extractedHtml != null) {
-             if (looksLikeHtml(extractedHtml)) {
-                 return new HtmlExtractResult(true, extractedHtml);
-             }
-             // Extracted code but not HTML → treat as plain text (show original)
-             return new HtmlExtractResult(false, text);
-         }
-         
-         // No code block found — check if the whole text is raw HTML
-         if (looksLikeHtml(trimmed)) {
-             return new HtmlExtractResult(true, trimmed);
-         }
-         
-         return new HtmlExtractResult(false, text);
-     }
-     
+      private void addMessageLocally(ChatMessage.Role role, String text) {
+          // Store full original text; detect if AI message contains HTML block
+          boolean containsHtml = (role == ChatMessage.Role.AI) && containsHtmlBlock(text);
+          ChatMessage msg = new ChatMessage(role, text, getTimeString());
+          messagesContainer.getChildren().add(createMessageNode(msg, containsHtml));
+          if (activeChat != null) {
+              activeChat.getMessages().add(msg);
+          }
+      }
+
      /**
       * Heuristically checks if a string looks like HTML content.
       */
-     private boolean looksLikeHtml(String s) {
-         String lower = s.toLowerCase();
-         return (s.startsWith("<!DOCTYPE") || s.startsWith("<html") || 
-                 lower.contains("<head") && lower.contains("<body") ||
-                 (lower.contains("<!doctype") && lower.contains("</html>")));
-     }
-     
-     private boolean isHtmlContent(String text) {
-         String trimmed = text.trim();
-         // Strip markdown code fences (```html ... ``` or ``` ... ```)
-         if (trimmed.startsWith("```")) {
-             int firstNewline = trimmed.indexOf('\n');
-             if (firstNewline != -1) {
-                 trimmed = trimmed.substring(firstNewline + 1);
-             }
-             if (trimmed.endsWith("```")) {
-                 trimmed = trimmed.substring(0, trimmed.length() - 3);
-             }
-             trimmed = trimmed.trim();
-         }
-         // Check if looks like HTML
-         return trimmed.startsWith("<!DOCTYPE") || 
-                trimmed.startsWith("<html") ||
-                (trimmed.contains("<head>") && trimmed.contains("<body>")) ||
-                (trimmed.contains("<!DOCTYPE") && trimmed.contains("</html>"));
-     }
-     
+      private boolean looksLikeHtml(String s) {
+          String lower = s.toLowerCase();
+          return (s.startsWith("<!DOCTYPE") || s.startsWith("<html") || 
+                  lower.contains("<head") && lower.contains("<body") ||
+                  (lower.contains("<!doctype") && lower.contains("</html>")));
+      }
+      
+      /**
+       * Checks if the AI message contains an HTML code block (```html ... ``` or raw HTML)
+       */
+      private boolean containsHtmlBlock(String text) {
+          if (text == null) return false;
+          
+          // Check for markdown code block with html
+          if (text.contains("```html") || text.contains("```\n<!DOCTYPE") || text.contains("```\n<html")) {
+              return true;
+          }
+          // Check for ``` ... ``` that contains HTML
+          if (text.contains("```")) {
+              int firstFence = text.indexOf("```");
+              int secondFence = text.indexOf("```", firstFence + 3);
+              if (secondFence != -1) {
+                  String between = text.substring(firstFence + 3, secondFence).trim();
+                  if (looksLikeHtml(between)) return true;
+              }
+          }
+          // Check for raw HTML without fences (if message starts with HTML)
+          if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
+              return true;
+          }
+          return false;
+      }
+
      private void addMessageLocally(ChatMessage.Role role, String text, boolean isHtml) {
          ChatMessage msg = new ChatMessage(role, text, getTimeString());
          messagesContainer.getChildren().add(createMessageNode(msg, isHtml));
@@ -546,35 +487,52 @@ public class ChatController extends StackPane {
      
          VBox body = new VBox(4);
          
-         if (isHtml) {
-             // HTML rendering using WebView
-             WebView webView = new WebView();
-             webView.getStyleClass().add("msg-html");
-             WebEngine engine = webView.getEngine();
-             // Enable JavaScript for Tailwind
-             engine.setJavaScriptEnabled(true);
-             // Load HTML content
-             engine.loadContent(msg.getText());
-             webView.setPrefHeight(400);
-             webView.setMinHeight(300);
-             webView.setMaxHeight(500);
-             body.getChildren().add(webView);
-             
-             // Copy button for HTML (copies raw HTML)
-             Label copyBtn = new Label("📋");
-             copyBtn.getStyleClass().add("msg-copy-btn");
-             copyBtn.setTooltip(new Tooltip("Копировать HTML"));
-             copyBtn.setOnMouseClicked(e -> {
-                 javafx.scene.input.Clipboard clipboard = javafx.scene.input.Clipboard.getSystemClipboard();
-                 javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
-                 content.putString(msg.getText());
-                 clipboard.setContent(content);
-                 showToast("HTML скопирован");
-             });
-             HBox copyBox = new HBox(copyBtn);
-             copyBox.setAlignment(Pos.CENTER_RIGHT);
-             body.getChildren().add(copyBox);
-         } else {
+          if (isHtml) {
+              // Split message into: before HTML, HTML block, after HTML
+              MessageParts parts = splitMessageIntoParts(msg.getText());
+              
+              // Before text (intro)
+              if (parts.before != null && !parts.before.isBlank()) {
+                  Label beforeLabel = new Label(parts.before);
+                  beforeLabel.getStyleClass().add("msg-bubble");
+                  beforeLabel.setWrapText(true);
+                  body.getChildren().add(beforeLabel);
+              }
+              
+              // HTML WebView
+              WebView webView = new WebView();
+              webView.getStyleClass().add("msg-html");
+              WebEngine engine = webView.getEngine();
+              engine.setJavaScriptEnabled(true);
+              engine.loadContent(parts.html);
+              webView.setPrefHeight(400);
+              webView.setMinHeight(300);
+              webView.setMaxHeight(500);
+              body.getChildren().add(webView);
+              
+              // Copy button for HTML (copies HTML code)
+              Label copyBtn = new Label("📋 Копировать HTML");
+              copyBtn.getStyleClass().add("msg-copy-btn");
+              copyBtn.setTooltip(new Tooltip("Копировать HTML код"));
+              copyBtn.setOnMouseClicked(e -> {
+                  Clipboard clipboard = Clipboard.getSystemClipboard();
+                  ClipboardContent content = new ClipboardContent();
+                  content.putString(parts.html);
+                  clipboard.setContent(content);
+                  showToast("HTML скопирован");
+              });
+              HBox copyBox = new HBox(copyBtn);
+              copyBox.setAlignment(Pos.CENTER_RIGHT);
+              body.getChildren().add(copyBox);
+              
+              // After text (outro)
+              if (parts.after != null && !parts.after.isBlank()) {
+                  Label afterLabel = new Label(parts.after);
+                  afterLabel.getStyleClass().add("msg-bubble");
+                  afterLabel.setWrapText(true);
+                  body.getChildren().add(afterLabel);
+              }
+          } else {
              Label bubble = new Label(msg.getText());
              bubble.getStyleClass().add("msg-bubble");
              bubble.setWrapText(true);
@@ -610,10 +568,71 @@ public class ChatController extends StackPane {
              messageBox.getChildren().addAll(avatar, body);
          }
      
-         return messageBox;
-     }
-
-    private void showTypingIndicator() {
+          return messageBox;
+      }
+      
+      /**
+       * Splits an AI message that contains HTML code block into three parts:
+       * text before the code, the HTML code itself, and text after.
+       */
+      private MessageParts splitMessageIntoParts(String fullText) {
+          String before = null, html = null, after = null;
+          
+          // Try to find ```html ... ``` block first
+          String text = fullText;
+          int startIdx = -1;
+          int endIdx = -1;
+          
+          // Search for ```html
+          startIdx = text.indexOf("```html");
+          if (startIdx != -1) {
+              endIdx = text.indexOf("```", startIdx + 7);
+              if (endIdx != -1) {
+                  before = text.substring(0, startIdx).trim();
+                  html = text.substring(startIdx + 7, endIdx).trim();
+                  after = text.substring(endIdx + 3).trim();
+                  return new MessageParts(before, html, after);
+              }
+          }
+          
+          // Fallback: any ```...``` block
+          startIdx = text.indexOf("```");
+          if (startIdx != -1) {
+              endIdx = text.indexOf("```", startIdx + 3);
+              if (endIdx != -1) {
+                  before = text.substring(0, startIdx).trim();
+                  html = text.substring(startIdx + 3, endIdx).trim();
+                  after = text.substring(endIdx + 3).trim();
+                  if (looksLikeHtml(html)) {
+                      return new MessageParts(before, html, after);
+                  }
+              }
+          }
+          
+          // No code block found — treat whole text as HTML (raw)
+          if (looksLikeHtml(text.trim())) {
+              return new MessageParts(null, text.trim(), null);
+          }
+          
+          // Fallback: return as plain text parts (no HTML)
+          return new MessageParts(null, text, null);
+      }
+      
+      /**
+       * Simple data holder for the three parts of a message with HTML.
+       */
+      private static class MessageParts {
+          final String before;
+          final String html;
+          final String after;
+          MessageParts(String before, String html, String after) {
+              this.before = before;
+              this.html = html;
+              this.after = after;
+          }
+      }
+ 
+     private void showTypingIndicator() {
         HBox indicator = new HBox(10);
         indicator.getStyleClass().add("typing-indicator");
         indicator.setId("typingIndicator");
@@ -740,7 +759,7 @@ public class ChatController extends StackPane {
         headerTitle.setText(chat.getTitle());
          messagesContainer.getChildren().clear();
          for (ChatMessage msg : chat.getMessages()) {
-             boolean isHtml = (msg.getRole() == ChatMessage.Role.AI) && looksLikeHtml(msg.getText());
+             boolean isHtml = (msg.getRole() == ChatMessage.Role.AI) && containsHtmlBlock(msg.getText());
              messagesContainer.getChildren().add(createMessageNode(msg, isHtml));
          }
         if (mainScreen.isVisible()) {
