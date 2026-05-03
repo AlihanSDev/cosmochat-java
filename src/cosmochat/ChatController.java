@@ -20,6 +20,8 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
  import javafx.scene.control.*;
  import javafx.scene.input.KeyCode;
+ import javafx.scene.input.Clipboard;
+ import javafx.scene.input.ClipboardContent;
  import javafx.scene.layout.*;
  import javafx.scene.paint.Color;
  import javafx.scene.shape.Circle;
@@ -456,11 +458,41 @@ public class ChatController extends StackPane {
              webView.setMinHeight(300);
              webView.setMaxHeight(500);
              body.getChildren().add(webView);
+             
+             // Copy button for HTML (copies raw HTML)
+             Label copyBtn = new Label("📋");
+             copyBtn.getStyleClass().add("msg-copy-btn");
+             copyBtn.setTooltip(new Tooltip("Копировать HTML"));
+             copyBtn.setOnMouseClicked(e -> {
+                 javafx.scene.input.Clipboard clipboard = javafx.scene.input.Clipboard.getSystemClipboard();
+                 javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+                 content.putString(msg.getText());
+                 clipboard.setContent(content);
+                 showToast("HTML скопирован");
+             });
+             HBox copyBox = new HBox(copyBtn);
+             copyBox.setAlignment(Pos.CENTER_RIGHT);
+             body.getChildren().add(copyBox);
          } else {
              Label bubble = new Label(msg.getText());
              bubble.getStyleClass().add("msg-bubble");
              bubble.setWrapText(true);
              body.getChildren().add(bubble);
+             
+             // Copy button (appears below bubble, aligned right)
+             Label copyBtn = new Label("📋 Копировать");
+             copyBtn.getStyleClass().add("msg-copy-btn");
+             copyBtn.setTooltip(new Tooltip("Копировать сообщение"));
+             copyBtn.setOnMouseClicked(e -> {
+                 javafx.scene.input.Clipboard clipboard = javafx.scene.input.Clipboard.getSystemClipboard();
+                 javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+                 content.putString(msg.getText());
+                 clipboard.setContent(content);
+                 showToast("Скопировано");
+             });
+             HBox copyBox = new HBox(copyBtn);
+             copyBox.setAlignment(Pos.CENTER_RIGHT);
+             body.getChildren().add(copyBox);
          }
          
          Label time = new Label(msg.getTime());

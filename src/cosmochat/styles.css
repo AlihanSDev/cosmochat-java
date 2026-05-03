@@ -129,6 +129,21 @@
      -fx-padding: 4px 0 0 0;
  }
  
+ /* Copy button */
+ .msg-copy-btn {
+     -fx-background-color: transparent;
+     -fx-text-fill: -fx-fg-dim;
+     -fx-font-size: 12px;
+     -fx-cursor: hand;
+     -fx-padding: 4px 8px;
+     -fx-background-radius: 6px;
+     -fx-opacity: 0.7;
+ }
+ .msg-copy-btn:hover {
+     -fx-background-color: rgba(255,255,255,0.08);
+     -fx-opacity: 1;
+ }
+ 
  /* HTML Message WebView Styling */
  .msg-html WebView {
      -fx-background-color: transparent;
