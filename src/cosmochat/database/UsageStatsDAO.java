@@ -65,7 +65,7 @@ public class UsageStatsDAO {
         }
     }
 
-    private void resetUsage(int userId) throws SQLException {
+    public void resetUsage(int userId) throws SQLException {
         String reset = "UPDATE user_usage SET messages_sent = 0, hour_window_start = CURRENT_TIMESTAMP WHERE user_id = ?";
         try (PreparedStatement stmt = dbManager.getConnection().prepareStatement(reset)) {
             stmt.setInt(1, userId);

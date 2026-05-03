@@ -47,4 +47,13 @@ public class UsageTrackingService implements UsageTracking {
             throw new RuntimeException("Failed to get usage stats", e);
         }
     }
+
+    @Override
+    public void resetUsageLimits(UserId userId) {
+        try {
+            usageStatsDAO.resetUsage(userId.getValue());
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to reset usage limits", e);
+        }
+    }
 }

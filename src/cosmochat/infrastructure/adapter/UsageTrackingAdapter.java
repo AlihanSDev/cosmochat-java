@@ -39,12 +39,21 @@ public class UsageTrackingAdapter implements UsageTracking {
             return new UsageStats(
                 userId,
                 stats.getMessagesSent(),
-                stats.getRemaining(),
+                UsageStatsDAO.getHourlyMessageLimit(),
                 stats.getWindowStart(),
                 stats.getWindowEnd()
             );
         } catch (SQLException e) {
             throw new RuntimeException("Failed to get usage stats", e);
+        }
+    }
+
+    @Override
+    public void resetUsageLimits(UserId userId) {
+        try {
+            usageStatsDAO.resetUsage(userId.getValue());
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to reset usage limits", e);
         }
     }
 }

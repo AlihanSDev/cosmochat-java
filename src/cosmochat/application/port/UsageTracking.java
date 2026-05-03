@@ -7,4 +7,5 @@ public interface UsageTracking {
     boolean canSendMessage(UserId userId);
     void incrementMessageCount(UserId userId);
     UsageStats getCurrentStats(UserId userId);
+    void resetUsageLimits(UserId userId);
 }

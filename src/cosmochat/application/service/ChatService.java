@@ -140,6 +140,13 @@ public class ChatService {
         return usageTracking.getCurrentStats(user.getId());
     }
 
+    public void resetUsageLimits() {
+        User user = getCurrentUser.execute();
+        if (user != null) {
+            usageTracking.resetUsageLimits(user.getId());
+        }
+    }
+
     // Send message using command (with model)
     public SendMessageResult sendMessage(SendMessageCommand command) throws Exception {
         return sendMessage.execute(command);

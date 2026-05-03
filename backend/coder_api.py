@@ -57,6 +57,17 @@ TEMPERATURE = 0.7
 app = Flask(__name__)
 CORS(app)  # Разрешить CORS запросы
 
+# Логирование всех входящих запросов
+@app.before_request
+def log_request():
+    logger.info("→ %s %s", request.method, request.path)
+
+# Логирование всех ответов
+@app.after_request
+def log_response(response):
+    logger.info("← %s %s - %d", request.method, request.path, response.status_code)
+    return response
+
 # Глобальная переменная для модели
 llm = None
 
@@ -105,24 +116,26 @@ def health_check():
 @app.route('/chat', methods=['POST'])
 def chat():
     """Обработка запроса к чат-боту."""
+    logger.info("📥 Получен запрос на /chat")
+    
     if llm is None:
-        logger.warning("Chat request received but model is not loaded")
+        logger.warning("Модель не загружена, отклоняем запрос")
         return jsonify({'error': 'Model not loaded'}), 503
     
-    data = request.get_json(silent=True)
-    if not data or 'message' not in data:
-        payload = request.get_data(as_text=True)
-        logger.warning("Invalid chat request: missing JSON or message field. Headers=%s Body=%s", dict(request.headers), payload)
-        return jsonify({'error': 'Message is required'}), 400
-    
-    message = data['message']
-    max_tokens = data.get('max_tokens', MAX_TOKENS)
-    temperature = data.get('temperature', TEMPERATURE)
-    
-    logger.info("📥 Запрос: %s", message)
-    logger.debug("Request parameters: max_tokens=%s, temperature=%s", max_tokens, temperature)
-    
     try:
+        data = request.get_json(silent=True)
+        if not data or 'message' not in data:
+            payload = request.get_data(as_text=True)
+            logger.warning("Invalid chat request: missing JSON or message field. Headers=%s Body=%s", dict(request.headers), payload)
+            return jsonify({'error': 'Message is required'}), 400
+
+        message = data['message']
+        max_tokens = data.get('max_tokens', MAX_TOKENS)
+        temperature = data.get('temperature', TEMPERATURE)
+
+        logger.info(" Запрос: %s", message[:100] + "..." if len(message) > 100 else message)
+        logger.debug("Parameters: max_tokens=%s, temperature=%s", max_tokens, temperature)
+
         # Формируем промпт для Qwen Coder Instruct
         prompt = (
             "<|im_start|>system\n"
@@ -145,20 +158,23 @@ def chat():
             raise ValueError('AI model returned invalid response format')
 
         response_text = output['choices'][0].get('text', '').strip()
-        tokens_used = output.get('usage', {}).get('total_tokens', 0)
+        token_count = output.get('usage', {}).get('total_tokens', 0)
         
         if not response_text:
             raise ValueError('AI model returned empty text')
         
-        logger.info("📤 Ответ: %s", response_text)
-        logger.info("Tokens used: %s", tokens_used)
+        logger.info("📤 Ответ: %s", response_text[:200] + "..." if len(response_text) > 200 else response_text)
+        logger.info("Tokens used: %d", token_count)
         
         return jsonify({
             'response': response_text,
             'model': 'Qwen2.5-Coder-1.5B-Instruct',
-            'tokens_used': tokens_used
+            'tokens_used': token_count
         })
         
+    except ValueError as ve:
+        logger.error("Ошибка валидации ответа модели: %s", ve)
+        return jsonify({'error': 'Model returned invalid response: ' + str(ve)}), 500
     except Exception as e:
         logger.exception("Ошибка генерации ответа")
         return jsonify({'error': str(e)}), 500
@@ -167,18 +183,22 @@ def chat():
 @app.route('/generate', methods=['POST'])
 def generate():
     """Генерация текста (без системного промпта)."""
+    logger.info("Получен запрос на /generate")
+    
     if llm is None:
+        logger.warning("Модель не загружена для /generate")
         return jsonify({'error': 'Model not loaded'}), 503
     
-    data = request.get_json()
-    
-    if not data or 'prompt' not in data:
-        return jsonify({'error': 'Prompt is required'}), 400
-    
-    prompt = data['prompt']
-    max_tokens = data.get('max_tokens', MAX_TOKENS)
-    
     try:
+        data = request.get_json()
+        if not data or 'prompt' not in data:
+            return jsonify({'error': 'Prompt is required'}), 400
+        
+        prompt = data['prompt']
+        max_tokens = data.get('max_tokens', MAX_TOKENS)
+        
+        logger.info("Генерация текста: %s", prompt[:100] + "..." if len(prompt) > 100 else prompt)
+        
         output = llm(
             prompt,
             max_tokens=max_tokens,
@@ -191,7 +211,20 @@ def generate():
         })
         
     except Exception as e:
+        logger.exception("Ошибка в /generate")
         return jsonify({'error': str(e)}), 500
+
+
+# Глобальный обработчик ошибок - гарантирует, что ВСЕ исключения возвращаются как JSON
+@app.errorhandler(500)
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Обработчик всех необработанных исключений."""
+    logger.exception("Необработанное исключение в Flask")
+    return jsonify({
+        'error': 'Internal server error',
+        'message': str(e) if app.debug else 'An unexpected error occurred'
+    }), 500
 
 
 if __name__ == '__main__':

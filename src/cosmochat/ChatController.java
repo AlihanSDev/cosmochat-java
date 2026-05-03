@@ -64,10 +64,17 @@ public class ChatController extends StackPane {
     private VBox messagesContainer;
     private StackPane chatViewContainer;
     private Label headerTitle;
-    private VBox mainScreen;
-    private VBox chatScreen;
-     private String selectedModel = "Qwen 1.5B Coder (CosmoChat Gateway)";
-     private Button testHtmlBtn;
+     private VBox mainScreen;
+     private VBox chatScreen;
+      private String selectedModel = "Qwen 1.5B Coder (CosmoChat Gateway)";
+      private Button testHtmlBtn;
+     private Timeline profileRefreshTimeline;
+     // Profile UI components for live updates
+     private Label profileUsedValue;
+     private Label profileRemainingValue;
+     private ProgressBar profileUsageProgress;
+     private Label profileWindowInfo;
+     private UsageStats profileStats;
 
     public ChatController(ChatService chatService) {
         this.chatService = chatService;
@@ -817,10 +824,22 @@ public class ChatController extends StackPane {
         trans.play();
     }
 
-     private void showModal(String type) {
-         VBox modalContent = new VBox(20);
-         modalContent.getStyleClass().add("modal");
-         modalContent.setMaxWidth(380);
+      private void showModal(String type) {
+          // Stop profile timer if running (profile modal is being replaced)
+          if (profileRefreshTimeline != null) {
+              profileRefreshTimeline.stop();
+              profileRefreshTimeline = null;
+          }
+          // Clear profile component references
+          profileUsedValue = null;
+          profileRemainingValue = null;
+          profileUsageProgress = null;
+          profileWindowInfo = null;
+          profileStats = null;
+
+          VBox modalContent = new VBox(20);
+          modalContent.getStyleClass().add("modal");
+          modalContent.setMaxWidth(380);
          
          Button closeBtn = new Button("×");
          closeBtn.getStyleClass().add("modal-close");
@@ -912,9 +931,32 @@ public class ChatController extends StackPane {
          wrapper.getChildren().addAll(modalContent, closeBtn);
          modalContent.getChildren().addAll(title, desc, fields, errorLabel, submitBtn);
          modalOverlay.getChildren().setAll(wrapper);
-         modalOverlay.setVisible(true);
-         modalOverlay.setMouseTransparent(false);
-     }
+          modalOverlay.setVisible(true);
+          modalOverlay.setMouseTransparent(false);
+
+          // Start live timer to update remaining time every second
+          startProfileTimer();
+      }
+
+      private void startProfileTimer() {
+          // Stop any existing timer
+          if (profileRefreshTimeline != null) {
+              profileRefreshTimeline.stop();
+          }
+
+          // Create new timer that updates every second
+          profileRefreshTimeline = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
+              if (profileStats != null) {
+                  if (!profileStats.isWindowExpired()) {
+                      profileWindowInfo.setText("Окно лимитов сбрасывается через: " + formatTimeRemaining(profileStats.windowEnd()));
+                  } else {
+                      profileWindowInfo.setText("Лимиты сброшены — окно обновлено");
+                  }
+              }
+          }));
+          profileRefreshTimeline.setCycleCount(Animation.INDEFINITE);
+          profileRefreshTimeline.play();
+      }
  
      private VBox createField(String label, String prompt) {
          VBox box = new VBox(6);
@@ -927,12 +969,24 @@ public class ChatController extends StackPane {
          return box;
       }
   
-       private void hideModal() {
-           modalOverlay.setVisible(false);
-           modalOverlay.setMouseTransparent(true);
-       }
-       
-       private void sendTestHtmlMessage() {
+         private void hideModal() {
+             // Stop profile timer if running
+             if (profileRefreshTimeline != null) {
+                 profileRefreshTimeline.stop();
+                 profileRefreshTimeline = null;
+             }
+             // Clear profile component references
+             profileUsedValue = null;
+             profileRemainingValue = null;
+             profileUsageProgress = null;
+             profileWindowInfo = null;
+             profileStats = null;
+
+             modalOverlay.setVisible(false);
+             modalOverlay.setMouseTransparent(true);
+          }
+
+        private void sendTestHtmlMessage() {
            if (!chatService.canSendMessage()) {
                showToast("Лимит сообщений исчерпан (100/час)");
                return;
@@ -1058,72 +1112,82 @@ public class ChatController extends StackPane {
          header.getChildren().addAll(avatarWrapper, titleBox);
          HBox.setHgrow(titleBox, Priority.ALWAYS);
 
-         // Divider
-         Region divider = new Region();
-         divider.getStyleClass().add("profile-divider");
+          // Divider
+          Region divider = new Region();
+          divider.getStyleClass().add("profile-divider");
 
-         // Usage stats
-         VBox statsBox = new VBox(12);
-         statsBox.getStyleClass().add("profile-stats");
+          // Usage stats - styled like AI services (OpenAI/Anthropic)
+          UsageStats stats = chatService.getUsageStats();
+          profileStats = stats; // store for timer updates
 
-         UsageStats stats = chatService.getUsageStats();
+          VBox usageBox = new VBox(10);
+          usageBox.getStyleClass().add("profile-usage-box");
 
-         // Messages sent label
-         Label sentLabel = new Label("Отправлено");
-         sentLabel.getStyleClass().add("profile-stat-label");
-         Label sentCount = new Label(stats != null ? String.valueOf(stats.messagesSent()) : "—");
-         sentCount.getStyleClass().add("profile-stat-value");
+          // Header
+          Label usageHeader = new Label("Использование модели");
+          usageHeader.getStyleClass().add("profile-usage-header");
 
-         HBox sentBox = new HBox();
-         sentBox.setAlignment(Pos.CENTER_LEFT);
-         Region sentSpacer = new Region();
-         HBox.setHgrow(sentSpacer, Priority.ALWAYS);
-         sentBox.getChildren().addAll(sentLabel, sentSpacer, sentCount);
+          // Current usage metrics
+          HBox metricsRow = new HBox(20);
+          metricsRow.setAlignment(Pos.CENTER);
 
-         // Limit
-         Label limitLabel = new Label("Лимит в час");
-         limitLabel.getStyleClass().add("profile-stat-label");
-         Label limitValue = new Label("100");
-         limitValue.getStyleClass().add("profile-stat-value");
-         HBox limitBox = new HBox();
-         limitBox.setAlignment(Pos.CENTER_LEFT);
-         Region limitSpacer = new Region();
-         HBox.setHgrow(limitSpacer, Priority.ALWAYS);
-         limitBox.getChildren().addAll(limitLabel, limitSpacer, limitValue);
+          // Used messages
+          VBox usedBox = new VBox(4);
+          usedBox.setAlignment(Pos.CENTER);
+          profileUsedValue = new Label(stats != null ? String.valueOf(stats.messagesSent()) : "0");
+          profileUsedValue.getStyleClass().add("profile-usage-value");
+          Label usedLabel = new Label("Отправлено");
+          usedLabel.getStyleClass().add("profile-usage-label");
+          usedBox.getChildren().addAll(profileUsedValue, usedLabel);
 
-         // Progress bar
-         ProgressBar progress = new ProgressBar(stats != null ? stats.getUsagePercentage() / 100.0 : 0);
-         progress.getStyleClass().add("profile-progress");
-         progress.setPrefWidth(260);
+          // Separator
+          Region midSeparator = new Region();
+          midSeparator.setPrefWidth(1);
+          midSeparator.setStyle("-fx-background-color: rgba(255,255,255,0.15);");
 
-         // Remaining time
-         Label timeLabel = new Label();
-         if (stats != null && !stats.isWindowExpired()) {
-             timeLabel.setText("Сброс лимита через: " + formatTimeRemaining(stats.windowEnd()));
-             timeLabel.getStyleClass().add("profile-time-label");
-         } else {
-             timeLabel.setText("Лимит сброшен");
-             timeLabel.getStyleClass().add("profile-time-label-reset");
-         }
+          // Remaining messages
+          VBox remainingBox = new VBox(4);
+          remainingBox.setAlignment(Pos.CENTER);
+          int remaining = stats != null ? stats.hourlyLimit() - stats.messagesSent() : 100;
+          profileRemainingValue = new Label(String.valueOf(remaining));
+          profileRemainingValue.getStyleClass().add("profile-usage-value-highlight");
+          Label remainingLabel = new Label("До сброса");
+          remainingLabel.getStyleClass().add("profile-usage-label");
+          remainingBox.getChildren().addAll(profileRemainingValue, remainingLabel);
 
-         statsBox.getChildren().addAll(sentBox, limitBox, progress, timeLabel);
+          metricsRow.getChildren().addAll(usedBox, midSeparator, remainingBox);
 
-         StackPane wrapper = new StackPane();
-         wrapper.getChildren().addAll(modalContent, closeBtn);
-         modalContent.getChildren().addAll(header, divider, statsBox);
-         modalOverlay.getChildren().setAll(wrapper);
-         modalOverlay.setVisible(true);
-         modalOverlay.setMouseTransparent(false);
+          // Progress bar with window info
+          profileUsageProgress = new ProgressBar(stats != null ? stats.getUsagePercentage() / 100.0 : 0);
+          profileUsageProgress.getStyleClass().add("profile-usage-progress");
+          profileUsageProgress.setPrefWidth(300);
 
-         // Auto-refresh time every minute
-         final UsageStats finalStats = stats;
-         Timeline refresh = new Timeline(new KeyFrame(Duration.minutes(1), e -> {
-             if (finalStats != null && !finalStats.isWindowExpired()) {
-                 timeLabel.setText("Сброс лимита через: " + formatTimeRemaining(finalStats.windowEnd()));
-             }
-         }));
-         refresh.setCycleCount(Animation.INDEFINITE);
-          refresh.play();
+          // Window reset info
+          profileWindowInfo = new Label();
+          if (stats != null && !stats.isWindowExpired()) {
+              profileWindowInfo.setText("Окно лимитов сбрасывается через: " + formatTimeRemaining(stats.windowEnd()));
+          } else {
+              profileWindowInfo.setText("Лимиты сброшены — окно обновлено");
+          }
+          profileWindowInfo.getStyleClass().add("profile-window-info");
+
+          usageBox.getChildren().addAll(usageHeader, metricsRow, profileUsageProgress, profileWindowInfo);
+
+          // Container for usage stats
+          VBox statsContainer = new VBox(12);
+          statsContainer.getStyleClass().add("profile-stats");
+          statsContainer.getChildren().add(usageBox);
+
+          modalContent.getChildren().addAll(header, divider, statsContainer);
+
+          StackPane wrapper = new StackPane();
+          wrapper.getChildren().addAll(modalContent, closeBtn);
+          modalOverlay.getChildren().setAll(wrapper);
+          modalOverlay.setVisible(true);
+          modalOverlay.setMouseTransparent(false);
+
+          // Start live timer to update remaining time every second
+          startProfileTimer();
       }
   
       private String formatTimeRemaining(java.time.LocalDateTime windowEnd) {
