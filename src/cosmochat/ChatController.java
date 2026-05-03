@@ -16,6 +16,7 @@ import javafx.animation.*;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
  import javafx.scene.control.*;
@@ -40,9 +41,10 @@ import javafx.concurrent.Task;
  * Delegates all business logic to ChatService.
  */
 public class ChatController extends StackPane {
-    private static final double SIDEBAR_WIDTH = 280;
-    private final ObservableList<ChatItem> chatHistory = FXCollections.observableArrayList();
-    private ChatItem activeChat;
+     private static final double SIDEBAR_WIDTH = 280;
+     private final ObservableList<ChatItem> chatHistory = FXCollections.observableArrayList();
+     private final FilteredList<ChatItem> filteredChats = new FilteredList<>(chatHistory);
+     private ChatItem activeChat;
     private Integer activeChatId; // database ID
     private int nextChatId = 1;
     private boolean sidebarOpen = true;
@@ -698,17 +700,27 @@ public class ChatController extends StackPane {
         VBox newChatWrapper = new VBox(newChatBtn);
         newChatWrapper.setPadding(new Insets(0, 16, 12, 16));
 
-        TextField searchField = new TextField();
-        searchField.setPromptText("Поиск чатов...");
-        searchField.getStyleClass().add("sidebar-search");
-        VBox searchWrapper = new VBox(searchField);
-        searchWrapper.setPadding(new Insets(0, 16, 12, 16));
+         TextField searchField = new TextField();
+         searchField.setPromptText("Поиск чатов...");
+         searchField.getStyleClass().add("sidebar-search");
+         
+         // Add search functionality
+         searchField.textProperty().addListener((obs, oldVal, newVal) -> {
+             String filter = newVal.toLowerCase().trim();
+             filteredChats.setPredicate(chat -> {
+                 if (filter.isEmpty()) return true;
+                 return chat.getTitle().toLowerCase().contains(filter);
+             });
+         });
+         
+         VBox searchWrapper = new VBox(searchField);
+         searchWrapper.setPadding(new Insets(0, 16, 12, 16));
 
         Label historyLabel = new Label("ИСТОРИЯ");
         historyLabel.getStyleClass().add("sidebar-section-label");
         VBox.setMargin(historyLabel, new Insets(0, 16, 6, 16));
 
-        chatListView = new ListView<>(chatHistory);
+         chatListView = new ListView<>(filteredChats);
         chatListView.getStyleClass().add("chat-list");
         chatListView.setCellFactory(param -> new ChatListCell());
         VBox.setVgrow(chatListView, Priority.ALWAYS);
