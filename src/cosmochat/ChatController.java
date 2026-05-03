@@ -420,7 +420,29 @@ public class ChatController extends StackPane {
 
 
      private void addMessageLocally(ChatMessage.Role role, String text) {
-         addMessageLocally(role, text, false);
+         // Auto-detect HTML content for AI messages
+         boolean isHtml = (role == ChatMessage.Role.AI) && isHtmlContent(text);
+         addMessageLocally(role, text, isHtml);
+     }
+     
+     private boolean isHtmlContent(String text) {
+         String trimmed = text.trim();
+         // Strip markdown code fences (```html ... ``` or ``` ... ```)
+         if (trimmed.startsWith("```")) {
+             int firstNewline = trimmed.indexOf('\n');
+             if (firstNewline != -1) {
+                 trimmed = trimmed.substring(firstNewline + 1);
+             }
+             if (trimmed.endsWith("```")) {
+                 trimmed = trimmed.substring(0, trimmed.length() - 3);
+             }
+             trimmed = trimmed.trim();
+         }
+         // Check if looks like HTML
+         return trimmed.startsWith("<!DOCTYPE") || 
+                trimmed.startsWith("<html") ||
+                (trimmed.contains("<head>") && trimmed.contains("<body>")) ||
+                (trimmed.contains("<!DOCTYPE") && trimmed.contains("</html>"));
      }
      
      private void addMessageLocally(ChatMessage.Role role, String text, boolean isHtml) {
