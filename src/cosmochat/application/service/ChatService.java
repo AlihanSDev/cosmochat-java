@@ -140,7 +140,12 @@ public class ChatService {
         return usageTracking.getCurrentStats(user.getId());
     }
 
-    // Send message
+    // Send message using command (with model)
+    public SendMessageResult sendMessage(SendMessageCommand command) throws Exception {
+        return sendMessage.execute(command);
+    }
+
+    // Send message (legacy, kept for backwards compatibility)
     public SendMessageResult sendMessage(int chatId, String text) throws Exception {
         User user = getCurrentUser.execute();
         if (user == null) throw new IllegalStateException("Not authenticated");
@@ -148,7 +153,8 @@ public class ChatService {
         SendMessageCommand cmd = new SendMessageCommand(
             user.getId(),
             chatId == 0 ? null : new ChatId(chatId),
-            text
+            text,
+            "Qwen 1.5B Coder (CosmoChat Gateway)" // default model
         );
         return sendMessage.execute(cmd);
     }

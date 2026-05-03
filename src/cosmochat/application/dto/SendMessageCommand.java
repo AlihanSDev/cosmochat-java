@@ -7,5 +7,6 @@ import cosmochat.domain.UserId;
 public record SendMessageCommand(
     UserId userId,
     ChatId chatId,
-    String text
+    String text,
+    String model
 ) {}

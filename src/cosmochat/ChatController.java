@@ -5,9 +5,11 @@ import cosmochat.application.dto.ChatDTO;
 import cosmochat.application.dto.MessageDTO;
 import cosmochat.application.dto.UsageStats;
 import cosmochat.application.dto.SendMessageResult;
+import cosmochat.application.dto.SendMessageCommand;
 import cosmochat.application.dto.UserDTO;
 import cosmochat.domain.Role;
 import cosmochat.domain.UserId;
+import cosmochat.domain.ChatId;
 import cosmochat.ChatMessage;
 
 import javafx.animation.*;
@@ -364,7 +366,14 @@ public class ChatController extends StackPane {
             @Override
             protected SendMessageResult call() throws Exception {
                 int chatId = activeChatId != null ? activeChatId : 0;
-                return chatService.sendMessage(chatId, text);
+                UserDTO currentUser = chatService.getCurrentUser();
+                SendMessageCommand cmd = new SendMessageCommand(
+                    new UserId(currentUser.id()),
+                    chatId == 0 ? null : new ChatId(chatId),
+                    text,
+                    selectedModel
+                );
+                return chatService.sendMessage(cmd);
             }
         };
 
@@ -387,10 +396,8 @@ public class ChatController extends StackPane {
             Throwable ex = aiTask.getException();
             String errorMsg = ex.getMessage();
             if (errorMsg == null) errorMsg = ex.toString();
-            String displayMsg = errorMsg.contains("not loaded") || errorMsg.contains("unavailable")
-                ? "❌ Сервис ИИ недоступен. Запустите Python API сервер."
-                : "❌ Ошибка: " + errorMsg;
-            Platform.runLater(() -> addMessageLocally(ChatMessage.Role.AI, displayMsg));
+            final String finalErrorMsg = errorMsg;
+            Platform.runLater(() -> addMessageLocally(ChatMessage.Role.AI, finalErrorMsg));
             scrollToBottom();
         });
 
