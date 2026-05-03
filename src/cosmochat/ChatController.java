@@ -659,10 +659,11 @@ public class ChatController extends StackPane {
         activeChat.setActive(true);
         activeChatId = chat.getId(); // set active chat ID
         headerTitle.setText(chat.getTitle());
-        messagesContainer.getChildren().clear();
-        for (ChatMessage msg : chat.getMessages()) {
-            messagesContainer.getChildren().add(createMessageNode(msg));
-        }
+         messagesContainer.getChildren().clear();
+         for (ChatMessage msg : chat.getMessages()) {
+             boolean isHtml = (msg.getRole() == ChatMessage.Role.AI) && isHtmlContent(msg.getText());
+             messagesContainer.getChildren().add(createMessageNode(msg, isHtml));
+         }
         if (mainScreen.isVisible()) {
             FadeTransition fadeOut = new FadeTransition(Duration.millis(200), mainScreen);
             fadeOut.setFromValue(1);
