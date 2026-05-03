@@ -6,9 +6,9 @@ import cosmochat.application.dto.SendMessageCommand;
 import cosmochat.application.dto.SendMessageResult;
 import cosmochat.domain.*;
 import cosmochat.domain.port.*;
+import cosmochat.infrastructure.adapter.AiPortSelector;
 
 import java.time.Instant;
-import java.util.concurrent.TimeUnit;
 
 public class SendMessageService implements SendMessage {
     private static final int MAX_RETRIES = 3;
@@ -17,20 +17,20 @@ public class SendMessageService implements SendMessage {
     private final MessageRepository messageRepository;
     private final ChatRepository chatRepository;
     private final UserRepository userRepository;
-    private final AiPort aiPort;
+    private final AiPortSelector aiPortSelector;
     private final UsageTracking usageTracking;
 
     public SendMessageService(
             MessageRepository messageRepository,
             ChatRepository chatRepository,
             UserRepository userRepository,
-            AiPort aiPort,
+            AiPortSelector aiPortSelector,
             UsageTracking usageTracking
     ) {
         this.messageRepository = messageRepository;
         this.chatRepository = chatRepository;
         this.userRepository = userRepository;
-        this.aiPort = aiPort;
+        this.aiPortSelector = aiPortSelector;
         this.usageTracking = usageTracking;
     }
 
@@ -77,7 +77,7 @@ public class SendMessageService implements SendMessage {
         );
         messageRepository.save(userMessage);
 
-        // Call AI with retries
+        // Call AI with retry logic (passing model-aware AiPort)
         String aiResponse;
         try {
             aiResponse = callAiWithRetry(text, model);
@@ -104,6 +104,8 @@ public class SendMessageService implements SendMessage {
     
     private String callAiWithRetry(String text, String model) throws Exception {
         Exception lastException = null;
+        AiPort aiPort = aiPortSelector.getPortForModel(model);
+        
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
                 return aiPort.sendMessage(text);
@@ -113,7 +115,7 @@ public class SendMessageService implements SendMessage {
                     String userMessage = getUserFriendlyErrorMessage(e, model);
                     throw new Exception(userMessage, e);
                 }
-                // Exponential backoff: 0.5s, 1s, 2s
+                // Exponential backoff
                 long delay = INITIAL_DELAY_MS * (1L << (attempt - 1));
                 Thread.sleep(delay);
             }
@@ -153,19 +155,25 @@ public class SendMessageService implements SendMessage {
             lower.contains("unable to connect") || lower.contains("reset by peer")) {
             if (model.contains("Qwen 1.5B") || model.contains("CosmoChat Gateway")) {
                 return prefix + "Не удалось подключиться к локальному Python API серверу. Убедитесь, что запущен backend/qwen_api.py.";
+            } else if (model.contains("HuggingFace")) {
+                return prefix + "Не удалось подключиться к HuggingFace сервису. Убедитесь, что запущен Spring Boot сервер (backend/spring-huggingface).";
             } else {
-                return prefix + "Ошибка подключения к API модели. Проверьте интернет-соединение и правильность API ключа.";
+                return prefix + "Ошибка подключения к API модели. Проверьте интернет-соединение.";
             }
         }
         
-        // Model not loaded (503)
-        if (lower.contains("503") || lower.contains("not loaded")) {
+        // Model not loaded / service unavailable (503)
+        if (lower.contains("503") || lower.contains("not loaded") || lower.contains("service unavailable")) {
             if (model.contains("Qwen 1.5B") || model.contains("CosmoChat Gateway")) {
                 return prefix + "Локальная модель Qwen не загружена. Запустите Python API сервер и дождитесь полной загрузки модели.";
             } else if (model.contains("HuggingFace")) {
-                return prefix + "Модель на HuggingFace недоступна. Проверьте ваш API токен и доступ к модели.";
+                return prefix + "Сервис HuggingFace недоступен. Убедитесь, что Spring Boot сервер запущен и токен корректный.";
+            } else if (model.contains("Mistral")) {
+                return prefix + "Сервис Mistral недоступен. Проверьте настройки API.";
+            } else if (model.contains("Deepseek")) {
+                return prefix + "Сервис Deepseek недоступен. Проверьте настройки API.";
             } else {
-                return prefix + "Модель не загружена. Проверьте настройки API и попробуйте позже.";
+                return prefix + "Сервис модели недоступен. Попробуйте позже.";
             }
         }
         
@@ -173,8 +181,10 @@ public class SendMessageService implements SendMessage {
         if (lower.contains("429") || lower.contains("rate limit")) {
             if (model.contains("HuggingFace")) {
                 return prefix + "Превышен лимит запросов HuggingFace API. Пожалуйста, подождите несколько минут.";
-            } else if (model.contains("Mistral") || model.contains("Deepseek")) {
-                return prefix + "Превышен лимит запросов API. Подождите и попробуйте снова.";
+            } else if (model.contains("Mistral")) {
+                return prefix + "Превышен лимит запросов Mistral API. Подождите и попробуйте снова.";
+            } else if (model.contains("Deepseek")) {
+                return prefix + "Превышен лимит запросов Deepseek API. Подождите и попробуйте снова.";
             } else {
                 return prefix + "Превышен лимит запросов. Пожалуйста, подождите минуту.";
             }
@@ -183,7 +193,7 @@ public class SendMessageService implements SendMessage {
         // Authentication errors (401, 403)
         if (lower.contains("401") || lower.contains("403") || lower.contains("unauthorized") || lower.contains("forbidden")) {
             if (model.contains("HuggingFace")) {
-                return prefix + "Ошибка авторизации HuggingFace. Проверьте ваш API токен.";
+                return prefix + "Ошибка авторизации HuggingFace. Проверьте ваш API токен (HF_TOKEN в .env).";
             } else if (model.contains("Mistral")) {
                 return prefix + "Ошибка авторизации Mistral API. Проверьте ваш API ключ.";
             } else if (model.contains("Deepseek")) {
@@ -198,12 +208,27 @@ public class SendMessageService implements SendMessage {
             return prefix + "Неверный запрос к модели. Пожалуйста, попробуйте переформулировать ваш запрос.";
         }
         
-        // Server errors (500, 502)
-        if (lower.contains("500") || lower.contains("502")) {
-            return prefix + "Внутренняя ошибка сервера модели. Попробуйте позже.";
+        // Server errors (500, 502, 504)
+        if (lower.contains("500") || lower.contains("502") || lower.contains("504")) {
+            if (model.contains("HuggingFace")) {
+                return prefix + "Ошибка сервера HuggingFace. Попробуйте позже.";
+            } else {
+                return prefix + "Внутренняя ошибка сервера модели. Попробуйте позже.";
+            }
+        }
+        
+        // HuggingFace specific errors (from GlobalExceptionHandler)
+        if (lower.contains("ошибка авторизации huggingface")) {
+            return prefix + "Ошибка авторизации HuggingFace. Проверьте ваш API токен (HF_TOKEN в .env).";
+        }
+        if (lower.contains("превышен лимит запросов huggingface")) {
+            return prefix + "Превышен лимит запросов HuggingFace API. Подождите несколько минут.";
+        }
+        if (lower.contains("модель") && lower.contains("не загружена")) {
+            return prefix + "Модель на HuggingFace ещё не загружена. Подождите 1-2 минуты.";
         }
         
         // Default fallback
-        return prefix + "Ошибка при генерации ответа: " + msg;
+        return prefix + "Ошибка при генерации ответа: " + (msg.length() > 100 ? msg.substring(0, 100) + "..." : msg);
     }
 }

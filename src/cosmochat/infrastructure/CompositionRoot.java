@@ -7,8 +7,14 @@ import cosmochat.infrastructure.adapter.*;
 import cosmochat.database.DatabaseManager;
 
 import java.sql.SQLException;
+import java.util.Map;
 
+/**
+ * Factory that creates ChatController with dependency injection.
+ * Supports multiple AI backends through AiPortSelector.
+ */
 public class CompositionRoot {
+    
     public static ChatControllerFactory createChatControllerFactory() {
         try {
             // Infrastructure adapters
@@ -17,43 +23,59 @@ public class CompositionRoot {
             UserRepository userRepository = new SqliteUserRepository();
             ChatRepository chatRepository = new SqliteChatRepository();
             MessageRepository messageRepository = new SqliteMessageRepository();
-            AiPort aiPort = new PythonAiClient();
+            
+            // AI adapters
+            AiPort pythonAiPort = new PythonAiClient();            // Local Qwen (port 5001)
+            AiPort huggingFaceAiPort = new HuggingFaceAiClient();  // Spring HF (port 8080)
+            
+            // Model → AI port mapping
+            Map<String, AiPort> aiPortMap = Map.of(
+                "Qwen 1.5B Coder (CosmoChat Gateway)", pythonAiPort,
+                "Qwen 7B Coder (HuggingFace API)", huggingFaceAiPort,
+                "Mistral", huggingFaceAiPort,    // placeholder until dedicated Mistral client
+                "Deepseek", huggingFaceAiPort    // placeholder until dedicated Deepseek client
+            );
+            
+            AiPortSelector aiPortSelector = new AiPortSelector(aiPortMap);
+            
             UsageTracking usageTracking = new UsageTrackingAdapter();
             SessionPort session = InMemorySessionService.getInstance();
 
-            // Application services (use cases)
+            // Application use cases
             AuthenticateUser authenticateUser = new AuthenticateUserService(userRepository, new cosmochat.security.PasswordHasher());
             RegisterUser registerUser = new RegisterUserService(userRepository, new cosmochat.security.PasswordHasher());
             CreateChat createChat = new CreateChatService(chatRepository, userRepository);
             GetChatHistory getChatHistory = new GetChatHistoryService(chatRepository);
             GetChatMessages getChatMessages = new GetChatMessagesService(messageRepository);
-            SendMessage sendMessage = new SendMessageService(messageRepository, chatRepository, userRepository, aiPort, usageTracking);
+            SendMessage sendMessage = new SendMessageService(
+                messageRepository, chatRepository, userRepository, 
+                aiPortSelector, usageTracking
+            );
             GetCurrentUser getCurrentUser = new GetCurrentUserService(session);
             LogoutUser logoutUser = new LogoutUserService(session);
 
             // Application service (orchestrator)
             ChatService chatService = new ChatService(
                 authenticateUser, registerUser, createChat, getChatHistory,
-                getChatMessages, sendMessage, getCurrentUser, logoutUser, usageTracking, session
+                getChatMessages, sendMessage, getCurrentUser, logoutUser, 
+                usageTracking, session
             );
 
             return new ChatControllerFactory(
                 chatService,
-                authenticateUser,
-                registerUser,
-                createChat,
-                getChatHistory,
-                getChatMessages,
-                sendMessage,
-                getCurrentUser,
-                logoutUser,
-                usageTracking
+                authenticateUser, registerUser, createChat,
+                getChatHistory, getChatMessages, sendMessage,
+                getCurrentUser, logoutUser, usageTracking
             );
         } catch (SQLException e) {
             throw new RuntimeException("Failed to initialize infrastructure", e);
         }
     }
 
+    /**
+     * Factory for creating ChatController with all dependencies.
+     * Public static nested class — acts like a top-level type.
+     */
     public static class ChatControllerFactory {
         public final ChatService chatService;
         public final AuthenticateUser authenticateUser;
@@ -94,3 +116,4 @@ public class CompositionRoot {
         }
     }
 }
+
