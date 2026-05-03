@@ -50,6 +50,7 @@ public class ChatController extends StackPane {
     private TextField inputField;
     private Button sendBtn;
     private VBox inputArea;
+    private ComboBox<String> modelSelector;
     private StackPane modalOverlay;
     private VBox toastContainer;
     private VBox sidebarFooter;
@@ -59,6 +60,7 @@ public class ChatController extends StackPane {
     private Label headerTitle;
     private VBox mainScreen;
     private VBox chatScreen;
+    private String selectedModel = "Qwen 1.5B Coder (CosmoChat Gateway)";
 
     public ChatController(ChatService chatService) {
         this.chatService = chatService;
@@ -198,12 +200,31 @@ public class ChatController extends StackPane {
         HBox bottomBar = new HBox();
         bottomBar.getStyleClass().add("input-bottom");
         bottomBar.setAlignment(Pos.CENTER_LEFT);
-        HBox actions = new HBox(4);
+        HBox actions = new HBox(6);
         Button attachBtn = new Button("📎");
         attachBtn.getStyleClass().add("action-btn");
+
+        // Model selector
+        modelSelector = new ComboBox<>();
+        modelSelector.getItems().addAll(
+            "Qwen 1.5B Coder (CosmoChat Gateway)",
+            "Qwen 7B Coder (HuggingFace API)",
+            "Mistral",
+            "Deepseek"
+        );
+        modelSelector.getSelectionModel().selectFirst();
+        modelSelector.getStyleClass().add("model-selector");
+        modelSelector.setTooltip(new Tooltip("Выберите модель ИИ"));
+        modelSelector.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null && !newVal.equals(oldVal)) {
+                selectedModel = newVal;
+                showToast("Модель изменена: " + newVal.split(" \\(")[0]);
+            }
+        });
+
         Button settingsBtn = new Button("⚙");
         settingsBtn.getStyleClass().add("action-btn");
-        actions.getChildren().addAll(attachBtn, settingsBtn);
+        actions.getChildren().addAll(attachBtn, modelSelector, settingsBtn);
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         sendBtn = new Button("↑");

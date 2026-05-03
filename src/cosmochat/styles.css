@@ -183,7 +183,57 @@
     -fx-pref-size: 34px;
     -fx-background-radius: 9px;
 }
-.action-btn:hover { -fx-text-fill: -fx-fg-dim; -fx-background-color: rgba(255,255,255,0.03); }
+.action-btn:hover {
+    -fx-text-fill: -fx-fg-dim;
+    -fx-background-color: rgba(255,255,255,0.03);
+}
+
+/* Model Selector */
+.model-selector {
+    -fx-background-color: rgba(255,255,255,0.02);
+    -fx-border-color: -fx-border;
+    -fx-border-width: 1px;
+    -fx-border-radius: 9px;
+    -fx-background-radius: 9px;
+    -fx-pref-width: 220px;
+    -fx-pref-height: 34px;
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-fg-dim;
+    -fx-cursor: hand;
+    -fx-text-overrun: ellipsis;
+}
+.model-selector:hover {
+    -fx-border-color: #2a2a34;
+    -fx-background-color: rgba(255,255,255,0.04);
+}
+.model-selector:focused {
+    -fx-border-color: #3a3a46;
+    -fx-background-color: rgba(255,255,255,0.05);
+}
+.model-selector .list-cell {
+    -fx-background-color: -fx-card;
+    -fx-text-fill: -fx-fg-dim;
+    -fx-font-size: 12px;
+}
+.model-selector .list-cell:filled:hover {
+    -fx-background-color: rgba(255,255,255,0.06);
+    -fx-text-fill: -fx-fg;
+}
+.model-selector .arrow-button {
+    -fx-background-color: transparent;
+}
+.model-selector .arrow {
+    -fx-background-color: -fx-muted;
+    -fx-shape: "M 0 0 L 7 7 L 14 0 Z";
+}
+.model-selector .combo-box-popup .list-view {
+    -fx-background-color: -fx-card;
+    -fx-border-color: -fx-border;
+    -fx-border-width: 1px;
+    -fx-background-radius: 8px;
+    -fx-border-radius: 8px;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.5), 20, 0, 0, 10);
+}
 
 .send-btn {
     -fx-background-color: -fx-accent;
