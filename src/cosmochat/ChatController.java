@@ -420,9 +420,88 @@ public class ChatController extends StackPane {
 
 
      private void addMessageLocally(ChatMessage.Role role, String text) {
-         // Auto-detect HTML content for AI messages
-         boolean isHtml = (role == ChatMessage.Role.AI) && isHtmlContent(text);
-         addMessageLocally(role, text, isHtml);
+         // Auto-detect and extract HTML content for AI messages
+         HtmlExtractResult htmlResult = extractHtmlIfPresent(text, role == ChatMessage.Role.AI);
+         boolean isHtml = htmlResult.isHtml;
+         String displayText = htmlResult.extractedText;
+         
+         // Store original full text in ChatMessage, but display extracted
+         ChatMessage msg = new ChatMessage(role, displayText, getTimeString());
+         messagesContainer.getChildren().add(createMessageNode(msg, isHtml));
+         if (activeChat != null) {
+             activeChat.getMessages().add(msg);
+         }
+     }
+     
+     /**
+      * Result of HTML extraction: whether it's HTML and what text to display
+      */
+     private static class HtmlExtractResult {
+         final boolean isHtml;
+         final String extractedText;
+         HtmlExtractResult(boolean isHtml, String extractedText) {
+             this.isHtml = isHtml;
+             this.extractedText = extractedText;
+         }
+     }
+     
+     /**
+      * Extracts HTML code from text if present (handles markdown code blocks).
+      * Returns the HTML to display and a flag indicating if it's HTML.
+      */
+     private HtmlExtractResult extractHtmlIfPresent(String text, boolean isAiMessage) {
+         if (!isAiMessage) {
+             return new HtmlExtractResult(false, text);
+         }
+         
+         String trimmed = text.trim();
+         
+         // Try to find HTML code block (```html ... ``` or just ```...```)
+         String extractedHtml = null;
+         
+         // Pattern for ```html ... ```
+         if (trimmed.startsWith("```html")) {
+             int endIdx = trimmed.indexOf("```", 7);
+             if (endIdx != -1) {
+                 extractedHtml = trimmed.substring(7, endIdx).trim();
+             }
+         }
+         // Pattern for ``` ... ``` (any language)
+         else if (trimmed.startsWith("```")) {
+             int firstNewline = trimmed.indexOf('\n');
+             if (firstNewline != -1) {
+                 int endIdx = trimmed.indexOf("```", firstNewline);
+                 if (endIdx != -1) {
+                     extractedHtml = trimmed.substring(firstNewline + 1, endIdx).trim();
+                 }
+             }
+         }
+         
+         // If we extracted something, check if it's actually HTML
+         if (extractedHtml != null) {
+             if (looksLikeHtml(extractedHtml)) {
+                 return new HtmlExtractResult(true, extractedHtml);
+             }
+             // Extracted code but not HTML → treat as plain text (show original)
+             return new HtmlExtractResult(false, text);
+         }
+         
+         // No code block found — check if the whole text is raw HTML
+         if (looksLikeHtml(trimmed)) {
+             return new HtmlExtractResult(true, trimmed);
+         }
+         
+         return new HtmlExtractResult(false, text);
+     }
+     
+     /**
+      * Heuristically checks if a string looks like HTML content.
+      */
+     private boolean looksLikeHtml(String s) {
+         String lower = s.toLowerCase();
+         return (s.startsWith("<!DOCTYPE") || s.startsWith("<html") || 
+                 lower.contains("<head") && lower.contains("<body") ||
+                 (lower.contains("<!doctype") && lower.contains("</html>")));
      }
      
      private boolean isHtmlContent(String text) {
@@ -661,7 +740,7 @@ public class ChatController extends StackPane {
         headerTitle.setText(chat.getTitle());
          messagesContainer.getChildren().clear();
          for (ChatMessage msg : chat.getMessages()) {
-             boolean isHtml = (msg.getRole() == ChatMessage.Role.AI) && isHtmlContent(msg.getText());
+             boolean isHtml = (msg.getRole() == ChatMessage.Role.AI) && looksLikeHtml(msg.getText());
              messagesContainer.getChildren().add(createMessageNode(msg, isHtml));
          }
         if (mainScreen.isVisible()) {
