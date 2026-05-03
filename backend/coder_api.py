@@ -13,6 +13,7 @@
 import sys
 import os
 import io
+import logging
 from pathlib import Path
 
 if os.name == 'nt':
@@ -37,8 +38,17 @@ except ImportError:
     sys.exit(1)
 
 
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger("coder_api")
+
 # Конфигурация
-MODEL_PATH = "models/qwen2.5-coder/qwen2.5-coder-1.5b-instruct-q2_k.gguf"
+ROOT_DIR = Path(__file__).resolve().parent
+MODEL_PATH = ROOT_DIR / "models" / "qwen2.5-coder" / "qwen2.5-coder-1.5b-instruct-q2_k.gguf"
 HOST = "127.0.0.1"
 PORT = 5001
 MAX_TOKENS = 512
@@ -58,12 +68,12 @@ def load_model():
     model_file = Path(MODEL_PATH)
     
     if not model_file.exists():
-        print(f"❌ Модель не найдена: {MODEL_PATH}")
-        print("Сначала запустите: python backend/download_coder.py")
+        logger.error("Модель не найдена: %s", model_file)
+        logger.error("Сначала запустите: python backend/download_coder.py")
         return False
     
-    print(f"🤖 Загрузка модели: {MODEL_PATH}")
-    print("Это может занять несколько минут...")
+    logger.info("Загрузка модели: %s", model_file)
+    logger.info("Это может занять несколько минут...")
     
     try:
         llm = Llama(
@@ -73,20 +83,22 @@ def load_model():
             n_gpu_layers=0,  # 0 = только CPU (для ноутбуков без GPU)
             verbose=False,
         )
-        print(f"✅ Модель загружена успешно!")
+        logger.info("Модель загружена успешно!")
         return True
     except Exception as e:
-        print(f"❌ Ошибка загрузки модели: {e}")
+        logger.exception("Ошибка загрузки модели")
         return False
 
 
 @app.route('/health', methods=['GET'])
 def health_check():
     """Проверка доступности API."""
+    loaded = llm is not None
+    logger.info("Health check requested. model_loaded=%s", loaded)
     return jsonify({
         'status': 'ok',
         'model': 'Qwen2.5-Coder-1.5B-Instruct',
-        'loaded': llm is not None
+        'loaded': loaded
     })
 
 
@@ -94,22 +106,31 @@ def health_check():
 def chat():
     """Обработка запроса к чат-боту."""
     if llm is None:
+        logger.warning("Chat request received but model is not loaded")
         return jsonify({'error': 'Model not loaded'}), 503
     
-    data = request.get_json()
-    
+    data = request.get_json(silent=True)
     if not data or 'message' not in data:
+        payload = request.get_data(as_text=True)
+        logger.warning("Invalid chat request: missing JSON or message field. Headers=%s Body=%s", dict(request.headers), payload)
         return jsonify({'error': 'Message is required'}), 400
     
     message = data['message']
     max_tokens = data.get('max_tokens', MAX_TOKENS)
     temperature = data.get('temperature', TEMPERATURE)
     
-    print(f"📥 Запрос: {message}")
+    logger.info("📥 Запрос: %s", message)
+    logger.debug("Request parameters: max_tokens=%s, temperature=%s", max_tokens, temperature)
     
     try:
         # Формируем промпт для Qwen Coder Instruct
-        prompt = f"<|im_start|>system\nТы полезный ассистент CosmoCoder AI, специализирующийся на генерации кода, отладке и рефакторинге.<|im_end|>\n<|im_start|>user\n{message}<|im_end|>\n<|im_start|>assistant\n"
+        prompt = (
+            "<|im_start|>system\n"
+            "Ты полезный ассистент CosmoCoder AI, специализирующийся на генерации кода, отладке и рефакторинге.<|im_end|>\n"
+            "<|im_start|>user\n"
+            f"{message}<|im_end|>\n"
+            "<|im_start|>assistant\n"
+        )
         
         # Генерируем ответ
         output = llm(
@@ -120,18 +141,26 @@ def chat():
             echo=False,
         )
         
-        response_text = output['choices'][0]['text'].strip()
+        if not output or 'choices' not in output or len(output['choices']) == 0:
+            raise ValueError('AI model returned invalid response format')
+
+        response_text = output['choices'][0].get('text', '').strip()
+        tokens_used = output.get('usage', {}).get('total_tokens', 0)
         
-        print(f"📤 Ответ: {response_text}")
+        if not response_text:
+            raise ValueError('AI model returned empty text')
+        
+        logger.info("📤 Ответ: %s", response_text)
+        logger.info("Tokens used: %s", tokens_used)
         
         return jsonify({
             'response': response_text,
             'model': 'Qwen2.5-Coder-1.5B-Instruct',
-            'tokens_used': output['usage']['total_tokens']
+            'tokens_used': tokens_used
         })
         
     except Exception as e:
-        print(f"❌ Ошибка генерации: {e}")
+        logger.exception("Ошибка генерации ответа")
         return jsonify({'error': str(e)}), 500
 
 

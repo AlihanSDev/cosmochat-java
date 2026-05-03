@@ -11,7 +11,12 @@
 
 import os
 import sys
+import io
 from pathlib import Path
+
+if os.name == 'nt':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 try:
     from huggingface_hub import hf_hub_download, list_repo_files

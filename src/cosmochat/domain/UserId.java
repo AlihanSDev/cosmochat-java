@@ -6,8 +6,8 @@ public final class UserId {
     private final int value;
 
     public UserId(int value) {
-        if (value <= 0) {
-            throw new IllegalArgumentException("User ID must be positive");
+        if (value < 0) {
+            throw new IllegalArgumentException("User ID cannot be negative");
         }
         this.value = value;
     }

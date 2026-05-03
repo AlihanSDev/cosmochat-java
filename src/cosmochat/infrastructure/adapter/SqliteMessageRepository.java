@@ -23,12 +23,11 @@ public class SqliteMessageRepository implements MessageRepository {
 
     @Override
     public Message save(Message message) {
-        String sql = "INSERT INTO messages (chat_id, role, text, timestamp) VALUES (?, ?, ?, datetime('now'))";
+        String sql = "INSERT INTO messages (chat_id, role, text, timestamp) VALUES (?, ?, ?, ?)";
         try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, message.getChatId().getValue());
             stmt.setString(2, message.getRole().name());
             stmt.setString(3, message.getText());
-            // timestamp TEXT - could store epoch or formatted time
             stmt.setString(4, formatTimestamp(message.getTimestamp()));
             int affected = stmt.executeUpdate();
             if (affected > 0) {

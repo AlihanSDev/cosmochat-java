@@ -1,48 +1,37 @@
-# Build
+# Build outputs
 build/
 out/
-target/
 *.class
 
-# Java
-.hg/
-.svn/
-.CVS/
+# JavaFX (large SDK files)
+javafx/
+javafx.zip
+javafx-sdk-*/
 
-# IDE
-.idea/
-.vscode/
-*.iml
-*.ipr
-*.iws
+# Libraries (if not tracking binaries)
+lib/
+*.jar
 
 # Python
-.venv/
-venv/
 __pycache__/
 *.pyc
-*.pyo
-*.egg-info/
-dist/
-*.egg
+backend/models/
 
-# Backend models (large files)
-backend/models/*.gguf
-backend/models/*.bin
+# Logs and temp files
+*.log
+*.md
+original_*.txt
+changed_files.txt
+snippet.txt
+test.txt
+classpath.txt
 
-# OS
+# Test scripts (local only)
+test_*.py
+test_simple.py
+test_*.java
+src/test/
+
+# OS files
 .DS_Store
 Thumbs.db
-*.swp
-*.swo
-
-# Logs
-*.log
-
-# Temporary
-tmp/
-temp/
-
-# User database
-# SQLite database stored in ~/.cosmochat/cosmo_chat.db
-# (ignored globally, not in project)

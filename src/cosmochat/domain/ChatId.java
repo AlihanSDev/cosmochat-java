@@ -6,8 +6,8 @@ public final class ChatId {
     private final int value;
 
     public ChatId(int value) {
-        if (value <= 0) {
-            throw new IllegalArgumentException("Chat ID must be positive");
+        if (value < 0) {
+            throw new IllegalArgumentException("Chat ID cannot be negative");
         }
         this.value = value;
     }

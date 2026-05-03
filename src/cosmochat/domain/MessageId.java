@@ -6,8 +6,8 @@ public final class MessageId {
     private final int value;
 
     public MessageId(int value) {
-        if (value <= 0) {
-            throw new IllegalArgumentException("Message ID must be positive");
+        if (value < 0) {
+            throw new IllegalArgumentException("Message ID cannot be negative");
         }
         this.value = value;
     }
