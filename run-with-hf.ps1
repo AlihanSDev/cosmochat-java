@@ -31,6 +31,38 @@ try {
     Read-Host "Press Enter to continue launching CosmoChat anyway (will show model selector but API calls will fail)"
 }
 
-# Launch JavaFX application
-Write-Host "Starting JavaFX application..." -ForegroundColor Cyan
-java --module-path $MODULE_PATH -m cosmochat/cosmochat.CosmoChatApp
+ # Load .env file from backend/spring-huggingface
+ $envFile = "backend/spring-huggingface/.env"
+ if (Test-Path $envFile) {
+     Write-Host "Loading environment from $envFile..." -ForegroundColor Gray
+     Get-Content $envFile | ForEach-Object {
+         if ($_ -match "^\s*([^=]+)\s*=\s*(.*)\s*$") {
+             $name = $matches[1]
+             $value = $matches[2]
+             # Remove quotes if present
+             $value = $value.Trim('"').Trim("'")
+             Set-Item -Path "Env:\$name" -Value $value -ErrorAction SilentlyContinue
+             Write-Host "  Set $name" -ForegroundColor Gray
+         }
+     }
+ } else {
+     Write-Host "Warning: .env file not found at $envFile" -ForegroundColor Yellow
+ }
+ 
+ # Prepare Java options with HF_TOKEN if available
+ $javaOpts = @()
+ if ($env:HF_TOKEN) {
+     $javaOpts += "-DHF_TOKEN=$env:HF_TOKEN"
+     Write-Host "  HF_TOKEN loaded from .env" -ForegroundColor Green
+ }
+ if ($env:HF_MODEL_ID) {
+     $javaOpts += "-DHF_MODEL_ID=$env:HF_MODEL_ID"
+ }
+ 
+ # Launch JavaFX application
+ Write-Host "Starting JavaFX application..." -ForegroundColor Cyan
+ if ($javaOpts.Count -gt 0) {
+     java @javaOpts --module-path $MODULE_PATH -m cosmochat/cosmochat.CosmoChatApp
+ } else {
+     java --module-path $MODULE_PATH -m cosmochat/cosmochat.CosmoChatApp
+ }

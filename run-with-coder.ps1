@@ -32,6 +32,19 @@ try {
     Read-Host "Press Enter to continue launching CosmoChat anyway (will show model selector but API calls will fail)"
 }
 
-# Launch JavaFX application
-Write-Host "Starting JavaFX application..." -ForegroundColor Cyan
-java --module-path $MODULE_PATH -m cosmochat/cosmochat.CosmoChatApp
+ # Load .env file from backend/spring-huggingface (optional, for consistency)
+ $envFile = "backend/spring-huggingface/.env"
+ if (Test-Path $envFile) {
+     Get-Content $envFile | ForEach-Object {
+         if ($_ -match "^\s*([^=]+)\s*=\s*(.*)\s*$") {
+             $name = $matches[1]
+             $value = $matches[2]
+             $value = $value.Trim('"').Trim("'")
+             Set-Item -Path "Env:\$name" -Value $value -ErrorAction SilentlyContinue
+         }
+     }
+ }
+ 
+ # Launch JavaFX application
+ Write-Host "Starting JavaFX application..." -ForegroundColor Cyan
+ java --module-path $MODULE_PATH -m cosmochat/cosmochat.CosmoChatApp
