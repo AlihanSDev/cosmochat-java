@@ -18,13 +18,15 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.control.*;
-import javafx.scene.input.KeyCode;
-import javafx.scene.layout.*;
-import javafx.scene.paint.Color;
-import javafx.scene.shape.Circle;
-import javafx.util.Duration;
-import javafx.scene.control.Tooltip;
+ import javafx.scene.control.*;
+ import javafx.scene.input.KeyCode;
+ import javafx.scene.layout.*;
+ import javafx.scene.paint.Color;
+ import javafx.scene.shape.Circle;
+ import javafx.scene.web.WebEngine;
+ import javafx.scene.web.WebView;
+ import javafx.util.Duration;
+ import javafx.scene.control.Tooltip;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -62,7 +64,8 @@ public class ChatController extends StackPane {
     private Label headerTitle;
     private VBox mainScreen;
     private VBox chatScreen;
-    private String selectedModel = "Qwen 1.5B Coder (CosmoChat Gateway)";
+     private String selectedModel = "Qwen 1.5B Coder (CosmoChat Gateway)";
+     private Button testHtmlBtn;
 
     public ChatController(ChatService chatService) {
         this.chatService = chatService;
@@ -247,29 +250,37 @@ public class ChatController extends StackPane {
         return area;
     }
 
-    private HBox createHints() {
-        HBox hintsBox = new HBox(8);
-        hintsBox.getStyleClass().add("hints");
-        hintsBox.setAlignment(Pos.CENTER);
-        String[][] hintData = {
-            {"Чёрные дыры", "Расскажи о чёрных дырах"},
-            {"Сколько звёзд?", "Сколько звёзд во Вселенной?"},
-            {"За пределами", "Что за пределами Вселенной?"},
-            {"Теория", "Объясни теорию относительности"}
-        };
-        for (String[] h : hintData) {
-            Button chip = new Button(h[0]);
-            chip.getStyleClass().add("hint-chip");
-            chip.setOnAction(e -> {
-                inputField.setText(h[1]);
-                sendBtn.setDisable(false);
-                sendBtn.getStyleClass().add("send-btn-active");
-                inputField.requestFocus();
-            });
-            hintsBox.getChildren().add(chip);
-        }
-        return hintsBox;
-    }
+     private HBox createHints() {
+         HBox hintsBox = new HBox(8);
+         hintsBox.getStyleClass().add("hints");
+         hintsBox.setAlignment(Pos.CENTER);
+         String[][] hintData = {
+             {"Чёрные дыры", "Расскажи о чёрных дырах"},
+             {"Сколько звёзд?", "Сколько звёзд во Вселенной?"},
+             {"За пределами", "Что за пределами Вселенной?"},
+             {"Теория", "Объясни теорию относительности"}
+         };
+         for (String[] h : hintData) {
+             Button chip = new Button(h[0]);
+             chip.getStyleClass().add("hint-chip");
+             chip.setOnAction(e -> {
+                 inputField.setText(h[1]);
+                 sendBtn.setDisable(false);
+                 sendBtn.getStyleClass().add("send-btn-active");
+                 inputField.requestFocus();
+             });
+             hintsBox.getChildren().add(chip);
+         }
+         
+         // Test HTML button
+         testHtmlBtn = new Button("📄 Test HTML");
+         testHtmlBtn.getStyleClass().add("hint-chip");
+         testHtmlBtn.setTooltip(new Tooltip("Отправить тестовый HTML в чат"));
+         testHtmlBtn.setOnAction(e -> sendTestHtmlMessage());
+         hintsBox.getChildren().add(testHtmlBtn);
+         
+         return hintsBox;
+     }
 
     private void showMainScreen() {
         if (mainScreen.isVisible()) return;
@@ -407,43 +418,67 @@ public class ChatController extends StackPane {
 
 
      private void addMessageLocally(ChatMessage.Role role, String text) {
+         addMessageLocally(role, text, false);
+     }
+     
+     private void addMessageLocally(ChatMessage.Role role, String text, boolean isHtml) {
          ChatMessage msg = new ChatMessage(role, text, getTimeString());
-         messagesContainer.getChildren().add(createMessageNode(msg));
+         messagesContainer.getChildren().add(createMessageNode(msg, isHtml));
          if (activeChat != null) {
              activeChat.getMessages().add(msg);
          }
      }
 
-    private HBox createMessageNode(ChatMessage msg) {
-        HBox messageBox = new HBox(10);
-        messageBox.getStyleClass().addAll("message",
-            msg.getRole() == ChatMessage.Role.USER ? "message--user" : "message--ai");
-
-        Label avatar = new Label(msg.getRole() == ChatMessage.Role.USER ? "U" : "AI");
-        avatar.getStyleClass().add("msg-avatar");
-
-        VBox body = new VBox(4);
-        Label bubble = new Label(msg.getText());
-        bubble.getStyleClass().add("msg-bubble");
-        bubble.setWrapText(true);
-
-        Label time = new Label(msg.getTime());
-        time.getStyleClass().add("msg-time");
-
-        body.getChildren().addAll(bubble, time);
-
-        if (msg.getRole() == ChatMessage.Role.USER) {
-            messageBox.setAlignment(Pos.CENTER_RIGHT);
-            body.setAlignment(Pos.CENTER_RIGHT);
-            messageBox.getChildren().addAll(body, avatar);
-        } else {
-            messageBox.setAlignment(Pos.CENTER_LEFT);
-            body.setAlignment(Pos.CENTER_LEFT);
-            messageBox.getChildren().addAll(avatar, body);
-        }
-
-        return messageBox;
-    }
+     private HBox createMessageNode(ChatMessage msg) {
+         return createMessageNode(msg, false);
+     }
+     
+     private HBox createMessageNode(ChatMessage msg, boolean isHtml) {
+         HBox messageBox = new HBox(10);
+         messageBox.getStyleClass().addAll("message",
+             msg.getRole() == ChatMessage.Role.USER ? "message--user" : "message--ai");
+     
+         Label avatar = new Label(msg.getRole() == ChatMessage.Role.USER ? "U" : "AI");
+         avatar.getStyleClass().add("msg-avatar");
+     
+         VBox body = new VBox(4);
+         
+         if (isHtml) {
+             // HTML rendering using WebView
+             WebView webView = new WebView();
+             webView.getStyleClass().add("msg-html");
+             WebEngine engine = webView.getEngine();
+             // Enable JavaScript for Tailwind
+             engine.setJavaScriptEnabled(true);
+             // Load HTML content
+             engine.loadContent(msg.getText());
+             webView.setPrefHeight(400);
+             webView.setMinHeight(300);
+             webView.setMaxHeight(500);
+             body.getChildren().add(webView);
+         } else {
+             Label bubble = new Label(msg.getText());
+             bubble.getStyleClass().add("msg-bubble");
+             bubble.setWrapText(true);
+             body.getChildren().add(bubble);
+         }
+         
+         Label time = new Label(msg.getTime());
+         time.getStyleClass().add("msg-time");
+         body.getChildren().add(time);
+     
+         if (msg.getRole() == ChatMessage.Role.USER) {
+             messageBox.setAlignment(Pos.CENTER_RIGHT);
+             body.setAlignment(Pos.CENTER_RIGHT);
+             messageBox.getChildren().addAll(body, avatar);
+         } else {
+             messageBox.setAlignment(Pos.CENTER_LEFT);
+             body.setAlignment(Pos.CENTER_LEFT);
+             messageBox.getChildren().addAll(avatar, body);
+         }
+     
+         return messageBox;
+     }
 
     private void showTypingIndicator() {
         HBox indicator = new HBox(10);
@@ -739,10 +774,102 @@ public class ChatController extends StackPane {
          return box;
       }
   
-      private void hideModal() {
-          modalOverlay.setVisible(false);
-          modalOverlay.setMouseTransparent(true);
-      }
+       private void hideModal() {
+           modalOverlay.setVisible(false);
+           modalOverlay.setMouseTransparent(true);
+       }
+       
+       private void sendTestHtmlMessage() {
+           if (!chatService.canSendMessage()) {
+               showToast("Лимит сообщений исчерпан (100/час)");
+               return;
+           }
+           
+           String htmlContent = "<!DOCTYPE html>\n" +
+               "<html lang=\"ru\">\n" +
+               "<head>\n" +
+               "<meta charset=\"utf-8\"/>\n" +
+               "<meta content=\"width=device-width, initial-scale=1.0\" name=\"viewport\"/>\n" +
+               "<title>Spring Framework</title>\n" +
+               "<script src=\"https://cdn.tailwindcss.com\"></script>\n" +
+               "<link href=\"https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Roboto+Mono:wght@400;500;600&display=swap\" rel=\"stylesheet\"/>\n" +
+               "<link href=\"https://cdn.cn.font.mi.com/font/css?family=MiSans:300,400,500,600,700:Chinese_Simplify,Latin&display=swap\" rel=\"stylesheet\"/>\n" +
+               "<link href=\"https://fonts.googleapis.com/icon?family=Material+Icons\" rel=\"stylesheet\"/>\n" +
+               "<style type=\"text/tailwindcss\">\n" +
+               "@layer utilities {\n" +
+               ".ppt-slide {\n" +
+               "@apply relative w-[1280px] h-[720px] mx-auto box-border\n" +
+               "}\n" +
+               "}\n" +
+               "</style>\n" +
+               "<style>body {\n" +
+               "    font-family: \"MiSans\", \"Roboto\", sans-serif;\n" +
+               "    background: #f5f5f5\n" +
+               "    }\n" +
+               ".title-font {\n" +
+               "    font-family: \"MiSans\", \"Roboto\", sans-serif\n" +
+               "    }\n" +
+               ".code-font {\n" +
+               "    font-family: \"Roboto Mono\", monospace\n" +
+               "    }</style>\n" +
+               "<style>.material-icons {\n" +
+               "    width: 1em\n" +
+               "    }</style><style>.material-icons {\n" +
+               "    direction: rtl\n" +
+               "    }</style></head>\n" +
+               "<body>\n" +
+               "<div class=\"ppt-slide flex justify-center items-center bg-white\" style=\"height: 720px\">\n" +
+               "<div class=\"absolute top-8 right-8 opacity-20\">\n" +
+               "<img alt=\"Spring Logo\" class=\"w-24 h-24 object-contain\" src=\"https://sfile.chatglm.cn/images-ppt/c4e49bf4ea9d.png\"/>\n" +
+               "</div>\n" +
+               "<div class=\"relative z-10 text-center px-20\">\n" +
+               "<div class=\"mb-6\">\n" +
+               "<div class=\"w-20 h-20 mx-auto mb-8 flex items-center justify-center\">\n" +
+               "<img alt=\"Spring Logo\" class=\"w-full h-full object-contain\" src=\"https://sfile.chatglm.cn/images-ppt/c4e49bf4ea9d.png\"/>\n" +
+               "</div>\n" +
+               "</div>\n" +
+               "<h1 class=\"title-font font-bold text-blue-700 mb-8 leading-tight\" style=\"font-size: 64px\">\n" +
+               "Spring Framework\n" +
+               "</h1>\n" +
+               "<div class=\"flex items-center justify-center gap-4 mb-8\">\n" +
+               "<div class=\"h-0.5 w-16 bg-blue-300\"></div>\n" +
+               "<div class=\"w-2 h-2 rounded-full bg-blue-400\"></div>\n" +
+               "<div class=\"h-0.5 w-16 bg-blue-300\"></div>\n" +
+               "</div>\n" +
+               "<p class=\"title-font text-2xl font-medium text-gray-700 tracking-wide\">\n" +
+               "Мощный фреймворк для разработки Java-приложений\n" +
+               "</p>\n" +
+               "<div class=\"mt-12 flex justify-center gap-8 text-sm text-gray-500\">\n" +
+               "<div class=\"flex items-center gap-2\">\n" +
+               "<i class=\"material-icons text-blue-500\" style=\"font-size: 20px\">code</i>\n" +
+               "<span>IoC & DI</span>\n" +
+               "</div>\n" +
+               "<div class=\"flex items-center gap-2\">\n" +
+               "<i class=\"material-icons text-blue-500\" style=\"font-size: 20px\">web</i>\n" +
+               "<span>Spring MVC</span>\n" +
+               "</div>\n" +
+               "<div class=\"flex items-center gap-2\">\n" +
+               "<i class=\"material-icons text-blue-500\" style=\"font-size: 20px\">storage</i>\n" +
+               "<span>Spring Data</span>\n" +
+               "</div>\n" +
+               "<div class=\"flex items-center gap-2\">\n" +
+               "<i class=\"material-icons text-blue-500\" style=\"font-size: 20px\">rocket_launch</i>\n" +
+               "<span>Spring Boot</span>\n" +
+               "</div>\n" +
+               "</div>\n" +
+               "</div>\n" +
+               "</div>\n" +
+               "</body>\n" +
+               "</html>";
+           
+           if (activeChat == null) {
+               createNewChat(htmlContent);
+           }
+           
+           addMessageLocally(ChatMessage.Role.AI, htmlContent, true);
+           scrollToBottom();
+           showToast("HTML тест отправлен");
+       }
   
      private void showProfileModal() {
          if (!chatService.isLoggedIn()) return;

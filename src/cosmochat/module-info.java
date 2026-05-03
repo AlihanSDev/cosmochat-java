@@ -1,10 +1,11 @@
-module cosmochat {
-    requires javafx.controls;
-    requires javafx.graphics;
-    requires java.net.http;
-    requires com.google.gson;
-    requires java.sql;
-    requires org.xerial.sqlitejdbc;
+ module cosmochat {
+     requires javafx.controls;
+     requires javafx.graphics;
+     requires javafx.web;
+     requires java.net.http;
+     requires com.google.gson;
+     requires java.sql;
+     requires org.xerial.sqlitejdbc;
 
     // Domain layer — pure entities, value objects, ports (interfaces)
     opens cosmochat.domain to javafx.graphics;
