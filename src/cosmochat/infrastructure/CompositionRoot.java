@@ -47,18 +47,19 @@ public class CompositionRoot {
             CreateChat createChat = new CreateChatService(chatRepository, userRepository);
             GetChatHistory getChatHistory = new GetChatHistoryService(chatRepository);
             GetChatMessages getChatMessages = new GetChatMessagesService(messageRepository);
+            GetCurrentUser getCurrentUser = new GetCurrentUserService(session);
+            DeleteChat deleteChat = new DeleteChatService(chatRepository, messageRepository, getCurrentUser);
             SendMessage sendMessage = new SendMessageService(
                 messageRepository, chatRepository, userRepository, 
                 aiPortSelector, usageTracking
             );
-            GetCurrentUser getCurrentUser = new GetCurrentUserService(session);
             LogoutUser logoutUser = new LogoutUserService(session);
 
             // Application service (orchestrator)
             ChatService chatService = new ChatService(
                 authenticateUser, registerUser, createChat, getChatHistory,
                 getChatMessages, sendMessage, getCurrentUser, logoutUser, 
-                usageTracking, session
+                usageTracking, session, deleteChat
             );
 
             return new ChatControllerFactory(

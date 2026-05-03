@@ -29,6 +29,10 @@ public class DatabaseManager {
 
         this.connection = DriverManager.getConnection(url);
         this.connection.setAutoCommit(true);
+        // Enable foreign key constraints (disabled by default in SQLite)
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute("PRAGMA foreign_keys = ON");
+        }
         initializeSchema();
     }
 

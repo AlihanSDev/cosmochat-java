@@ -25,6 +25,7 @@ public class ChatService {
     private final LogoutUser logoutUser;
     private final UsageTracking usageTracking;
     private final SessionPort session;
+    private final DeleteChat deleteChat;
 
     public ChatService(
             AuthenticateUser authenticateUser,
@@ -36,7 +37,8 @@ public class ChatService {
             GetCurrentUser getCurrentUser,
             LogoutUser logoutUser,
             UsageTracking usageTracking,
-            SessionPort session) {
+            SessionPort session,
+            DeleteChat deleteChat) {
         this.authenticateUser = authenticateUser;
         this.registerUser = registerUser;
         this.createChat = createChat;
@@ -47,6 +49,7 @@ public class ChatService {
         this.logoutUser = logoutUser;
         this.usageTracking = usageTracking;
         this.session = session;
+        this.deleteChat = deleteChat;
     }
 
     // Authentication
@@ -125,6 +128,10 @@ public class ChatService {
     public int createChat(String title, int userId) {
         Chat chat = createChat.executeForUser(new UserId(userId), title);
         return chat.getId().getValue();
+    }
+
+    public boolean deleteChat(int chatId) {
+        return deleteChat.execute(new ChatId(chatId));
     }
 
     // Rate limiting

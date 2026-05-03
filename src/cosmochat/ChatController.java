@@ -1259,14 +1259,25 @@ public class ChatController extends StackPane {
             deleteBtn.getStyleClass().add("chat-item-action");
             deleteBtn.setStyle("-fx-text-fill: #e55;");
             deleteBtn.setOnAction(e -> {
-                // Delete via service? For now UI-only
-                chatHistory.remove(getItem());
-                if (activeChat == getItem()) {
-                    activeChat = null;
-                    activeChatId = null;
-                    showMainScreen();
+                ChatItem item = getItem();
+                if (item == null) return;
+                int chatId = item.getId();
+                try {
+                    boolean deleted = chatService.deleteChat(chatId);
+                    if (deleted) {
+                        chatHistory.remove(item);
+                        if (activeChat == item) {
+                            activeChat = null;
+                            activeChatId = null;
+                            showMainScreen();
+                        }
+                        showToast("Чат удален");
+                    } else {
+                        showToast("Не удалось удалить чат");
+                    }
+                } catch (Exception ex) {
+                    showToast("Ошибка удаления: " + ex.getMessage());
                 }
-                showToast("Чат удален");
             });
             actionsBox.getChildren().addAll(deleteBtn);
             root.getChildren().addAll(iconWrap, info, actionsBox);
