@@ -26,6 +26,12 @@ snippet.txt
 test.txt
 classpath.txt
 
+# Python
+__pycache__/
+*.pyc
+backend/models/
+backend/.venv/
+
 # Test scripts (local only)
 test_*.py
 test_simple.py
