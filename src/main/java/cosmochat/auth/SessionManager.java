@@ -1,6 +1,6 @@
 package cosmochat.auth;
 
-import cosmochat.model.User;
+import cosmochat.domain.User;
 
 public class SessionManager {
     private static SessionManager instance;

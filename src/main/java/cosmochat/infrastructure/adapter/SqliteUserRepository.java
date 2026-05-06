@@ -4,7 +4,7 @@ import cosmochat.database.DatabaseManager;
 import cosmochat.domain.User;
 import cosmochat.domain.UserId;
 import cosmochat.domain.port.UserRepository;
-import cosmochat.security.PasswordHasher;
+import cosmochat.application.mapper.DomainMapper;
 
 import java.sql.*;
 import java.util.Optional;
@@ -28,7 +28,7 @@ public class SqliteUserRepository implements UserRepository {
             stmt.setString(1, email);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return Optional.of(mapRow(rs));
+                    return Optional.of(DomainMapper.mapResultSetToUser(rs));
                 }
             }
         } catch (SQLException e) {
@@ -81,7 +81,7 @@ public class SqliteUserRepository implements UserRepository {
             stmt.setInt(1, userId.getValue());
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return mapRow(rs);
+                    return DomainMapper.mapResultSetToUser(rs);
                 }
             }
         } catch (SQLException e) {
@@ -101,14 +101,5 @@ public class SqliteUserRepository implements UserRepository {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    private User mapRow(ResultSet rs) throws SQLException {
-        int id = rs.getInt("id");
-        String username = rs.getString("username");
-        String email = rs.getString("email");
-        String passwordHash = rs.getString("password_hash");
-        long createdAt = rs.getTimestamp("created_at").getTime();
-        return new User(new UserId(id), username, email, passwordHash, createdAt);
     }
 }

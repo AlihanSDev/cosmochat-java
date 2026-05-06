@@ -1,6 +1,8 @@
 package cosmochat.database;
 
-import cosmochat.model.User;
+import cosmochat.domain.User;
+import cosmochat.domain.UserId;
+import cosmochat.application.mapper.DomainMapper;
 import cosmochat.security.PasswordHasher;
 
 import java.sql.*;
@@ -41,7 +43,7 @@ public class UserDAO {
                 try (ResultSet keys = stmt.getGeneratedKeys()) {
                     if (keys.next()) {
                         int id = keys.getInt(1);
-                        return Optional.of(new User(id, username, email, System.currentTimeMillis()));
+                        return Optional.of(new User(new UserId(id), username, email, passwordHash, System.currentTimeMillis()));
                     }
                 }
             }
@@ -55,7 +57,7 @@ public class UserDAO {
             stmt.setString(1, email);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    User user = mapResultSetToUser(rs);
+                    User user = DomainMapper.mapResultSetToUser(rs);
                     String storedHash = user.getPasswordHash();
                     if (PasswordHasher.verifyPassword(password, storedHash)) {
                         // Return user without password hash for session
@@ -63,6 +65,7 @@ public class UserDAO {
                             user.getId(),
                             user.getUsername(),
                             user.getEmail(),
+                            null, // password hash not needed after login
                             user.getCreatedAt()
                         ));
                     }
@@ -78,7 +81,7 @@ public class UserDAO {
             stmt.setString(1, email);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return Optional.of(mapResultSetToUser(rs));
+                    return Optional.of(DomainMapper.mapResultSetToUser(rs));
                 }
             }
         }
@@ -91,19 +94,10 @@ public class UserDAO {
             stmt.setInt(1, userId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return mapResultSetToUser(rs);
+                    return DomainMapper.mapResultSetToUser(rs);
                 }
             }
         }
         return null;
-    }
-
-    private User mapResultSetToUser(ResultSet rs) throws SQLException {
-        int id = rs.getInt("id");
-        String username = rs.getString("username");
-        String email = rs.getString("email");
-        String passwordHash = rs.getString("password_hash");
-        long createdAt = rs.getTimestamp("created_at").getTime();
-        return new User(id, username, email, passwordHash, createdAt);
     }
 }

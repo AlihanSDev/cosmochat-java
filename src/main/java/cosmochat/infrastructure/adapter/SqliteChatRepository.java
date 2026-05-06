@@ -5,6 +5,7 @@ import cosmochat.domain.Chat;
 import cosmochat.domain.ChatId;
 import cosmochat.domain.UserId;
 import cosmochat.domain.port.ChatRepository;
+import cosmochat.application.mapper.DomainMapper;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -64,7 +65,7 @@ public class SqliteChatRepository implements ChatRepository {
             stmt.setInt(1, userId.getValue());
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    chats.add(mapRow(rs));
+                    chats.add(DomainMapper.mapResultSetToChat(rs));
                 }
             }
         } catch (SQLException e) {
@@ -80,7 +81,7 @@ public class SqliteChatRepository implements ChatRepository {
             stmt.setInt(1, chatId.getValue());
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    return Optional.of(mapRow(rs));
+                    return Optional.of(DomainMapper.mapResultSetToChat(rs));
                 }
             }
         } catch (SQLException e) {
@@ -126,13 +127,5 @@ public class SqliteChatRepository implements ChatRepository {
             throw new RuntimeException(e);
         }
         return Optional.empty();
-    }
-
-    private Chat mapRow(ResultSet rs) throws SQLException {
-        int id = rs.getInt("id");
-        int userId = rs.getInt("user_id");
-        String title = rs.getString("title");
-        long createdAt = rs.getTimestamp("created_at").getTime();
-        return new Chat(new ChatId(id), new UserId(userId), title, createdAt);
     }
 }

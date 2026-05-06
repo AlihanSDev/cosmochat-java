@@ -6,6 +6,7 @@ import cosmochat.domain.Message;
 import cosmochat.domain.MessageId;
 import cosmochat.domain.Role;
 import cosmochat.domain.port.MessageRepository;
+import cosmochat.application.mapper.DomainMapper;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -52,7 +53,7 @@ public class SqliteMessageRepository implements MessageRepository {
             stmt.setInt(1, chatId.getValue());
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    messages.add(mapRow(rs));
+                    messages.add(DomainMapper.mapResultSetToMessage(rs));
                 }
             }
         } catch (SQLException e) {
@@ -72,26 +73,8 @@ public class SqliteMessageRepository implements MessageRepository {
         }
     }
 
-    private Message mapRow(ResultSet rs) throws SQLException {
-        int id = rs.getInt("id");
-        int chatId = rs.getInt("chat_id");
-        Role role = Role.valueOf(rs.getString("role"));
-        String text = rs.getString("text");
-        String timestampStr = rs.getString("timestamp");
-        long timestamp = parseTimestamp(timestampStr);
-        return new Message(new MessageId(id), new ChatId(chatId), role, text, timestamp);
-    }
-
     private String formatTimestamp(long epochMilli) {
         // For simplicity, store as ISO string or epoch millis as string
         return String.valueOf(epochMilli);
-    }
-
-    private long parseTimestamp(String timestampStr) {
-        try {
-            return Long.parseLong(timestampStr);
-        } catch (NumberFormatException e) {
-            return System.currentTimeMillis();
-        }
     }
 }

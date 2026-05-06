@@ -4,6 +4,7 @@ import cosmochat.application.port.*;
 import cosmochat.application.dto.*;
 import cosmochat.domain.*;
 import cosmochat.domain.port.*;
+import cosmochat.application.mapper.DomainMapper;
 
 import java.util.List;
 import java.util.Optional;
@@ -76,12 +77,7 @@ public class ChatService {
     public UserDTO getCurrentUser() {
         User user = getCurrentUser.execute();
         if (user == null) return null;
-        return new UserDTO(
-            user.getId().getValue(),
-            user.getUsername(),
-            user.getEmail(),
-            user.getCreatedAt()
-        );
+        return DomainMapper.toUserDTO(user);
     }
 
     public void logout() {
@@ -98,30 +94,14 @@ public class ChatService {
         if (user == null) return List.of();
         List<Chat> chats = getChatHistory.execute(user.getId());
         return chats.stream()
-                .map(chat -> new ChatDTO(
-                    chat.getId().getValue(),
-                    chat.getTitle(),
-                    "Ранее",
-                    "★"
-                ))
+                .map(DomainMapper::toChatDTO)
                 .collect(Collectors.toList());
     }
 
     public List<MessageDTO> getMessagesForChat(int chatId) {
         List<Message> messages = getChatMessages.execute(new ChatId(chatId));
         return messages.stream()
-                .map(msg -> {
-                    java.time.LocalDateTime ldt = java.time.LocalDateTime.ofInstant(
-                        java.time.Instant.ofEpochMilli(msg.getTimestamp()),
-                        java.time.ZoneId.systemDefault()
-                    );
-                    String time = ldt.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
-                    return new MessageDTO(
-                        msg.getRole(),
-                        msg.getText(),
-                        time
-                    );
-                })
+                .map(DomainMapper::toMessageDTO)
                 .collect(Collectors.toList());
     }
 

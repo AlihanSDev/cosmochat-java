@@ -7,10 +7,12 @@ import cosmochat.application.dto.UsageStats;
 import cosmochat.application.dto.SendMessageResult;
 import cosmochat.application.dto.SendMessageCommand;
 import cosmochat.application.dto.UserDTO;
+import cosmochat.application.mapper.UIModelMapper;
 import cosmochat.domain.Role;
 import cosmochat.domain.UserId;
 import cosmochat.domain.ChatId;
 import cosmochat.ChatMessage;
+import cosmochat.ChatItem;
 
 import javafx.animation.*;
 import javafx.application.Platform;
@@ -94,24 +96,19 @@ public class ChatController extends StackPane {
     private void loadChatsFromDatabase() {
         List<ChatDTO> dbChats = chatService.getChatsForCurrentUser();
         for (ChatDTO chatDto : dbChats) {
-            ChatItem item = new ChatItem(
-                chatDto.id(),
-                chatDto.title(),
-                chatDto.date(),
-                chatDto.iconGlyph()
-            );
+            ChatItem item = UIModelMapper.toChatItem(chatDto);
             // Load messages for this chat
             List<MessageDTO> msgDtos = chatService.getMessagesForChat(chatDto.id());
             for (MessageDTO msgDto : msgDtos) {
-                ChatMessage.Role role = msgDto.role() == cosmochat.domain.Role.USER ? ChatMessage.Role.USER : ChatMessage.Role.AI;
-                item.getMessages().add(new ChatMessage(role, msgDto.text(), msgDto.time()));
+                ChatMessage msg = UIModelMapper.toChatMessage(msgDto);
+                item.getMessages().add(msg);
             }
-            chatHistory.add(item);
-        }
-        if (!dbChats.isEmpty()) {
-            nextChatId = dbChats.stream().mapToInt(ChatDTO::id).max().orElse(0) + 1;
-        }
-    }
+             chatHistory.add(item);
+         }
+         if (!dbChats.isEmpty()) {
+             nextChatId = dbChats.stream().mapToInt(ChatDTO::id).max().orElse(0) + 1;
+         }
+     }
 
     private void initializeUI() {
         HBox contentLayer = new HBox();
@@ -353,7 +350,12 @@ public class ChatController extends StackPane {
     private void createNewChat(String firstMessage) {
         String title = firstMessage.length() > 30 ? firstMessage.substring(0, 30) + "..." : firstMessage;
         String[] icons = {"★", "☄", "🚀", "🌍", "🛰", "🌙"};
-        ChatItem newChat = new ChatItem(nextChatId++, title, "Сейчас", icons[(int)(Math.random() * icons.length)]);
+        ChatItem newChat = UIModelMapper.createChatItem(
+            nextChatId++,
+            title,
+            "Сейчас",
+            icons[(int)(Math.random() * icons.length)]
+        );
         chatHistory.add(0, newChat);
         chatListView.getSelectionModel().select(0);
         switchToChat(newChat);
@@ -431,7 +433,8 @@ public class ChatController extends StackPane {
       private void addMessageLocally(ChatMessage.Role role, String text) {
           // Store full original text; detect if AI message contains HTML block
           boolean containsHtml = (role == ChatMessage.Role.AI) && containsHtmlBlock(text);
-          ChatMessage msg = new ChatMessage(role, text, getTimeString());
+          Role domainRole = (role == ChatMessage.Role.USER) ? Role.USER : Role.AI;
+          ChatMessage msg = UIModelMapper.createChatMessage(domainRole, text, getTimeString());
           messagesContainer.getChildren().add(createMessageNode(msg, containsHtml));
           if (activeChat != null) {
               activeChat.getMessages().add(msg);
@@ -474,13 +477,14 @@ public class ChatController extends StackPane {
           return false;
       }
 
-     private void addMessageLocally(ChatMessage.Role role, String text, boolean isHtml) {
-         ChatMessage msg = new ChatMessage(role, text, getTimeString());
-         messagesContainer.getChildren().add(createMessageNode(msg, isHtml));
-         if (activeChat != null) {
-             activeChat.getMessages().add(msg);
-         }
-     }
+      private void addMessageLocally(ChatMessage.Role role, String text, boolean isHtml) {
+          Role domainRole = (role == ChatMessage.Role.USER) ? Role.USER : Role.AI;
+          ChatMessage msg = UIModelMapper.createChatMessage(domainRole, text, getTimeString());
+          messagesContainer.getChildren().add(createMessageNode(msg, isHtml));
+          if (activeChat != null) {
+              activeChat.getMessages().add(msg);
+          }
+      }
 
      private HBox createMessageNode(ChatMessage msg) {
          return createMessageNode(msg, false);

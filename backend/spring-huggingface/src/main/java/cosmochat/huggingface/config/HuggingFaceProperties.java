@@ -14,7 +14,7 @@ public class HuggingFaceProperties {
 
     private String apiBaseUrl = "https://router.huggingface.co/v1";
     private String modelId = "Qwen/Qwen2.5-Coder-7B-Instruct";
-    private String nscaleSuffix = ":nscale";
+    private String nscaleSuffix = ":featherless-ai";
 
     public String getToken() {
         return token;

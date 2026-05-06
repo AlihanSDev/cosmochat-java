@@ -19,66 +19,67 @@ import java.util.logging.Logger;
  */
 public class HuggingFaceAiClient implements AiPort {
     private static final Logger logger = Logger.getLogger(HuggingFaceAiClient.class.getName());
-    // Use HuggingFace Inference API directly (OpenAI-compatible)
+    // Use HuggingFace Inference API directly
     private static final String API_URL = "https://router.huggingface.co/v1/chat/completions";
-    private static final String HEALTH_ENDPOINT = "https://huggingface.co/api/models";
-    
+    private static final String MODEL_ENV = "HF_MODEL_ID";
+    private static final String TOKEN_ENV = "HF_TOKEN";
+
     private final HttpClient httpClient;
     private final Gson gson;
-    private String serviceStatus = "unknown";
     private final String token;
     private final String modelId;
-    
+
     public HuggingFaceAiClient() {
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
         this.gson = new Gson();
         // Get token from environment/properties
-        this.token = System.getenv("HF_TOKEN") != null ? System.getenv("HF_TOKEN") 
-                   : System.getProperty("HF_TOKEN");
-        this.modelId = System.getenv("HF_MODEL_ID") != null ? System.getenv("HF_MODEL_ID")
-                     : "Qwen/Qwen2.5-Coder-7B-Instruct";
+        this.token = System.getenv(TOKEN_ENV) != null ? System.getenv(TOKEN_ENV)
+                    : System.getProperty(TOKEN_ENV);
+        this.modelId = System.getenv(MODEL_ENV) != null ? System.getenv(MODEL_ENV)
+                     : "Qwen/Qwen2.5-Coder-7B-Instruct:featherless-ai";
+
         if (token == null || token.isBlank()) {
-            logger.warning("HF_TOKEN environment variable not set. HuggingFace API will fail.");
+            logger.warning(TOKEN_ENV + " environment variable not set. HuggingFace API will fail.");
         }
+        logger.info("HuggingFaceAiClient initialized: model=" + modelId + ", tokenPresent=" + (token != null && !token.isBlank()));
     }
 
     @Override
     public boolean isAvailable() {
         if (token == null || token.isBlank()) {
-            serviceStatus = "no_token";
             return false;
         }
-        // Assume available if token exists; actual availability determined on first call
-        serviceStatus = "available";
+        // Assume available; actual check on first call
         return true;
     }
 
     @Override
     public String sendMessage(String message) throws Exception {
         if (token == null || token.isBlank()) {
-            throw new Exception("HuggingFace API token (HF_TOKEN) is not configured. Set environment variable HF_TOKEN.");
+            throw new Exception("HuggingFace API token (" + TOKEN_ENV + ") is not configured. Set environment variable.");
         }
-        
-        // Build chat completion request
+
+        // Build OpenAI-compatible chat completion request
         JsonObject requestBody = new JsonObject();
         requestBody.addProperty("model", modelId);
-        
+
         JsonObject userMsg = new JsonObject();
         userMsg.addProperty("role", "user");
         userMsg.addProperty("content", message);
-        
+
         JsonArray messages = new JsonArray();
         messages.add(userMsg);
         requestBody.add("messages", messages);
-        
+
         requestBody.addProperty("max_tokens", 512);
         requestBody.addProperty("temperature", 0.7);
-        
+        requestBody.addProperty("top_p", 0.9);
+
         String jsonBody = gson.toJson(requestBody);
-        logger.info("Sending request to HuggingFace: model=%s, message=%s".formatted(modelId, message.substring(0, Math.min(50, message.length()))));
-        
+        logger.fine("Sending request to HuggingFace: model=" + modelId + ", message=" + message.substring(0, Math.min(50, message.length())));
+
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(API_URL))
                 .timeout(Duration.ofSeconds(60))
@@ -88,8 +89,9 @@ public class HuggingFaceAiClient implements AiPort {
                 .build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        logger.info("HuggingFace response status: %d".formatted(response.statusCode()));
-        
+        logger.fine("HuggingFace response status: " + response.statusCode());
+        logger.fine("HuggingFace response body: " + response.body());
+
         if (response.statusCode() == 200) {
             JsonObject json = gson.fromJson(response.body(), JsonObject.class);
             JsonArray choices = json.getAsJsonArray("choices");
@@ -102,8 +104,16 @@ public class HuggingFaceAiClient implements AiPort {
             }
             throw new Exception("Unexpected response format from HuggingFace: " + response.body());
         } else {
+            // Parse error from HF
             String errorMsg = "HuggingFace API error (HTTP " + response.statusCode() + ")";
-            if (response.body().length() < 500) {
+            try {
+                JsonObject errJson = gson.fromJson(response.body(), JsonObject.class);
+                if (errJson.has("error")) {
+                    errorMsg += ": " + errJson.get("error").getAsString();
+                } else {
+                    errorMsg += ": " + response.body();
+                }
+            } catch (Exception ex) {
                 errorMsg += ": " + response.body();
             }
             throw new Exception(errorMsg);
