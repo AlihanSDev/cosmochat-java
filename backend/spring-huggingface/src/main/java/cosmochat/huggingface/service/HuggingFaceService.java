@@ -12,7 +12,7 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
-import java.time.Duration;
+import java.util.List;
 
 @Service
 public class HuggingFaceService {
@@ -23,16 +23,9 @@ public class HuggingFaceService {
     private final HuggingFaceProperties properties;
     private final RestTemplate restTemplate;
 
-    public HuggingFaceService(HuggingFaceProperties properties) {
+    public HuggingFaceService(HuggingFaceProperties properties, RestTemplate restTemplate) {
         this.properties = properties;
-        this.restTemplate = createRestTemplate();
-    }
-
-    private RestTemplate createRestTemplate() {
-        return new RestTemplateBuilder()
-                .setConnectTimeout(Duration.ofSeconds(10))
-                .setReadTimeout(Duration.ofSeconds(60))
-                .build();
+        this.restTemplate = restTemplate;
     }
 
     public String generateResponse(String userMessage) {
@@ -75,17 +68,17 @@ public class HuggingFaceService {
 
             } catch (HttpClientErrorException e) {
                 lastException = e;
-                HttpStatus status = e.getStatusCode();
-                logger.warn("HuggingFace API error: HTTP {} - {}", status.value(), e.getResponseBodyAsString());
+                int statusCode = e.getStatusCode().value();
+                logger.warn("HuggingFace API error: HTTP {} - {}", statusCode, e.getResponseBodyAsString());
 
-                HuggingFaceApiException.ErrorType errorType = classifyErrorByStatus(status.value(), e.getResponseBodyAsString());
-                boolean retryable = isRetryableError(errorType, status.value());
+                HuggingFaceApiException.ErrorType errorType = classifyErrorByStatus(statusCode, e.getResponseBodyAsString());
+                boolean retryable = isRetryableError(errorType, statusCode);
 
                 if (!retryable || attempt == MAX_RETRIES) {
                     throw new HuggingFaceApiException(
-                        getMessageForErrorType(errorType, status.value(), e.getResponseBodyAsString()),
+                        getMessageForErrorType(errorType, statusCode, e.getResponseBodyAsString()),
                         errorType,
-                        status.value()
+                        statusCode
                     );
                 }
 

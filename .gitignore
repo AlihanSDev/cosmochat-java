@@ -17,10 +17,10 @@ lib/
 __pycache__/
 *.pyc
 backend/models/
+backend/load_tests/
 
 # Logs and temp files
 *.log
-*.md
 original_*.txt
 changed_files.txt
 snippet.txt

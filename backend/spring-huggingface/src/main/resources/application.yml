@@ -1,0 +1,9 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+huggingface:
+  token: ${HF_TOKEN:}
+  api-base-url: ${HF_API_BASE_URL:https://router.huggingface.co/v1}
+  model-id: ${HF_MODEL_ID:Qwen/Qwen2.5-Coder-7B-Instruct}
+  nscale-suffix: ${HF_NSCALE_SUFFIX::featherless-ai}
+

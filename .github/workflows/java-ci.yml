@@ -1,0 +1,71 @@
+name: Java CI (Desktop + Spring)
+
+on:
+  push:
+    paths:
+      - "src/**"
+      - "pom.xml"
+      - "lib/**"
+      - "javafx/**"
+      - "build.ps1"
+      - "run-manual.ps1"
+      - "backend/spring-huggingface/**"
+      - "docker-compose.yml"
+      - ".github/workflows/java-ci.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "pom.xml"
+      - "lib/**"
+      - "javafx/**"
+      - "build.ps1"
+      - "run-manual.ps1"
+      - "backend/spring-huggingface/**"
+      - "docker-compose.yml"
+      - ".github/workflows/java-ci.yml"
+
+jobs:
+  desktop-build:
+    name: JavaFX desktop build (manual)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Compile (no Maven)
+        shell: pwsh
+        run: ./build.ps1
+
+  spring-huggingface:
+    name: Spring HuggingFace Docker build + healthcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Docker build
+        run: docker build -f backend/spring-huggingface/Dockerfile -t cosmochat-huggingface .
+      - name: Run container
+        run: |
+          docker run -d --name cosmochat-hf \
+            -e HF_TOKEN=dummy_token_for_ci \
+            -p 8080:8080 \
+            cosmochat-huggingface
+      - name: Wait for health
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8080/api/v1/health >/dev/null; then
+              echo "OK"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Healthcheck failed"
+          docker logs cosmochat-hf
+          exit 1
+      - name: Stop container
+        if: always()
+        run: |
+          docker rm -f cosmochat-hf || true
+
