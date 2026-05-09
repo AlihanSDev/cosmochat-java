@@ -157,7 +157,13 @@ def generate():
         })
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': str(e)        }), 500
+
+
+# Автозагрузка модели при запуске через WSGI (gunicorn)
+if __name__ != '__main__':
+    logger.info("Запуск через WSGI (gunicorn), автозагрузка модели...")
+    load_model()
 
 
 if __name__ == '__main__':

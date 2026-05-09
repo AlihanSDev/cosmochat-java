@@ -14,8 +14,8 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
         <javafx.version>21.0.11</javafx.version>
         <junit.version>5.10.2</junit.version>
     </properties>
@@ -83,16 +83,16 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.11.0</version>
-                <configuration>
-                    <release>21</release>
-                </configuration>
+            <configuration>
+                <release>17</release>
+            </configuration>
             </plugin>
 
             <!-- JavaFX Plugin -->
             <plugin>
                 <groupId>org.openjfx</groupId>
                 <artifactId>javafx-maven-plugin</artifactId>
-                <version>0.1.0</version>
+                <version>0.0.8</version>
                 <configuration>
                     <mainClass>cosmochat.CosmoChatApp</mainClass>
                 </configuration>

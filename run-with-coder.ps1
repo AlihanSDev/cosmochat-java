@@ -1,20 +1,38 @@
-# Run script for CosmoChat with Qwen Coder (Python backend)
-$JAVAFX_HOME = "javafx/javafx-sdk-21.0.11/lib"
-$BUILD_DIR = "build/classes"
-
-# Collect all JARs
-$javafxJars = Get-ChildItem -Path $JAVAFX_HOME -Filter *.jar | ForEach-Object { $_.FullName }
-$libJars = Get-ChildItem -Path "lib" -Filter *.jar | ForEach-Object { $_.FullName }
-$allPaths = @($BUILD_DIR) + $javafxJars + $libJars
-$MODULE_PATH = [System.String]::Join(";", $allPaths)
+# Запуск CosmoChat с локальным Qwen Coder (Python backend)
 
 Write-Host "`n=== Running CosmoChat with Qwen Coder (Python) ===" -ForegroundColor Green
-Write-Host "Module path includes:"
-Write-Host "  - Build dir: $BUILD_DIR"
-Write-Host "  - JavaFX JARs: $($javafxJars.Count)"
-Write-Host "  - Library JARs: $($libJars.Count)`n" -ForegroundColor Gray
 
-# Check Python backend
+$ErrorActionPreference = "Stop"
+
+$USER = $env:USERPROFILE
+$JARS = @(
+    "$USER\.m2\repository\org\openjfx\javafx-base\21.0.11\javafx-base-21.0.11-win.jar",
+    "$USER\.m2\repository\org\openjfx\javafx-controls\21.0.11\javafx-controls-21.0.11-win.jar",
+    "$USER\.m2\repository\org\openjfx\javafx-graphics\21.0.11\javafx-graphics-21.0.11-win.jar",
+    "$USER\.m2\repository\org\openjfx\javafx-web\21.0.11\javafx-web-21.0.11-win.jar",
+    "$USER\.m2\repository\org\openjfx\javafx-media\21.0.11\javafx-media-21.0.11-win.jar",
+    "$USER\.m2\repository\com\google\code\gson\gson\2.10.1\gson-2.10.1.jar",
+    "$USER\.m2\repository\org\xerial\sqlite-jdbc\3.45.2.0\sqlite-jdbc-3.45.2.0.jar",
+    "$USER\.m2\repository\org\slf4j\slf4j-api\1.7.36\slf4j-api-1.7.36.jar"
+)
+
+foreach ($jar in $JARS) {
+    if (-not (Test-Path $jar)) {
+        Write-Host "❌ Missing dependency: $jar" -ForegroundColor Red
+        Write-Host "   Run: .\build-maven.ps1 first to fetch dependencies`n" -ForegroundColor Yellow
+        exit 1
+    }
+}
+
+$BUILD_DIR = "target/classes"
+$MODULE_PATH = "target/classes;" + ($JARS -join ';')
+
+Write-Host "`nModule path configured:" -ForegroundColor Gray
+Write-Host "  Build dir: $BUILD_DIR"
+Write-Host "  JavaFX: base, controls, graphics, web, media"
+Write-Host "  Libs: gson, sqlite-jdbc, slf4j-api`n" -ForegroundColor Gray
+
+# Check Python API
 Write-Host "Checking Python API server..." -ForegroundColor Yellow
 try {
     $response = Invoke-RestMethod -Uri "http://127.0.0.1:5001/health" -Method Get -TimeoutSec 3
@@ -27,24 +45,9 @@ try {
     }
 } catch {
     Write-Host "❌ Python Qwen API is NOT running!" -ForegroundColor Red
-    Write-Host "   Start it with: python backend/qwen_api.py" -ForegroundColor Cyan
-    Write-Host "   Or run without backend: .\run.ps1`n" -ForegroundColor Cyan
-    Read-Host "Press Enter to continue launching CosmoChat anyway (will show model selector but API calls will fail)"
+    Write-Host "   Start it with: python backend\coder_api.py`n" -ForegroundColor Cyan
+    Read-Host "Press Enter to continue launching CosmoChat anyway (API calls will fail)"
 }
 
- # Load .env file from backend/spring-huggingface (optional, for consistency)
- $envFile = "backend/spring-huggingface/.env"
- if (Test-Path $envFile) {
-     Get-Content $envFile | ForEach-Object {
-         if ($_ -match "^\s*([^=]+)\s*=\s*(.*)\s*$") {
-             $name = $matches[1]
-             $value = $matches[2]
-             $value = $value.Trim('"').Trim("'")
-             Set-Item -Path "Env:\$name" -Value $value -ErrorAction SilentlyContinue
-         }
-     }
- }
- 
- # Launch JavaFX application
- Write-Host "Starting JavaFX application..." -ForegroundColor Cyan
- java --module-path $MODULE_PATH -m cosmochat/cosmochat.CosmoChatApp
+Write-Host "Starting JavaFX application..." -ForegroundColor Cyan
+java --module-path "$MODULE_PATH" -m cosmochat/cosmochat.CosmoChatApp

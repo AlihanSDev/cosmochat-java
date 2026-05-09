@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  # Qwen2.5-Coder API service (only coder needed)
+  coder-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cosmochat-coder
+    command: >
+      sh -c "
+        echo 'Waiting for model files...' &&
+        sleep 5 &&
+        gunicorn --bind 0.0.0.0:5001 --workers 1 --threads 4 --timeout 120 coder_api:app
+      "
+    ports:
+      - "5001:5001"
+    volumes:
+      # Mount models directory for persistence (maps to /app/backend/models)
+      - ./backend/models:/app/backend/models:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - FLASK_ENV=production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - cosmochat-network
+
+networks:
+  cosmochat-network:
+    driver: bridge

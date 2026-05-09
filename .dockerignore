@@ -1,0 +1,61 @@
+# Docker build ignore file for cosmochat-java
+
+# Build outputs
+target/
+build/
+out/
+*.class
+
+# JavaFX SDK (large)
+javafx/
+javafx.zip
+javafx-sdk-*/
+
+# Maven repositories and libs (if not needed in container)
+lib/
+*.jar
+.m2/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+backend/.venv/
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+
+# Models (large binary files - not baked into image)
+backend/models/
+*.gguf
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Test scripts
+test_*.py
+src/test/
+
+# Misc
+original_*.txt
+changed_files.txt
+snippet.txt
+test.txt
+classpath.txt

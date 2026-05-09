@@ -224,7 +224,13 @@ def handle_exception(e):
     return jsonify({
         'error': 'Internal server error',
         'message': str(e) if app.debug else 'An unexpected error occurred'
-    }), 500
+        }), 500
+
+
+# Автозагрузка модели при запуске через WSGI (gunicorn)
+if __name__ != '__main__':
+    logger.info("Запуск через WSGI (gunicorn), автозагрузка модели...")
+    load_model()
 
 
 if __name__ == '__main__':

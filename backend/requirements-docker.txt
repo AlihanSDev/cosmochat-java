@@ -1,0 +1,7 @@
+# Dependencies for both API services
+# llama-cpp-python will be built with CUDA support if available
+flask==3.0.3
+flask-cors==4.0.1
+llama-cpp-python==0.3.22
+huggingface_hub==0.23.2
+gunicorn==21.2.0
