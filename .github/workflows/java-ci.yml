@@ -26,7 +26,7 @@ on:
 
 jobs:
   desktop-build:
-    name: JavaFX desktop build (Maven)
+    name: JavaFX desktop build (manual)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,9 +35,66 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: Build (Maven)
+      - name: Prepare JavaFX SDK (CI)
         shell: pwsh
-        run: mvn -B clean test
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $targetDir = "javafx/javafx-sdk-21.0.11"
+          $targetLib = Join-Path $targetDir "lib"
+
+          if (Test-Path $targetLib) {
+            Write-Host "JavaFX SDK already present at $targetLib"
+            exit 0
+          }
+
+          New-Item -ItemType Directory -Path "javafx" -Force | Out-Null
+
+          $zipPath = Join-Path $env:RUNNER_TEMP "javafx-sdk.zip"
+          $urls = @(
+            "https://download2.gluonhq.com/openjfx/21.0.11/openjfx-21.0.11_windows-x64_bin-sdk.zip",
+            "https://download.oracle.com/java/21/latest/javafx-21_windows-x64_bin-sdk.zip"
+          )
+
+          $downloaded = $false
+          foreach ($u in $urls) {
+            try {
+              Write-Host "Downloading JavaFX SDK: $u"
+              Invoke-WebRequest -Uri $u -OutFile $zipPath -UseBasicParsing
+              $downloaded = $true
+              break
+            } catch {
+              Write-Host "Failed: $u"
+            }
+          }
+
+          if (-not $downloaded) {
+            throw "Unable to download JavaFX SDK from all sources."
+          }
+
+          # Clean any previous extraction
+          Get-ChildItem -Path "javafx" -Directory -Filter "javafx-sdk-*" -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
+
+          Expand-Archive -Path $zipPath -DestinationPath "javafx" -Force
+
+          $extracted = Get-ChildItem -Path "javafx" -Directory -Filter "javafx-sdk-*" | Select-Object -First 1
+          if (-not $extracted) {
+            throw "JavaFX extraction failed: javafx-sdk-* folder not found."
+          }
+
+          if (Test-Path $targetDir) {
+            Remove-Item $targetDir -Recurse -Force
+          }
+
+          Move-Item -Path $extracted.FullName -Destination $targetDir
+
+          if (-not (Test-Path $targetLib)) {
+            throw "JavaFX SDK lib not found at $targetLib after setup."
+          }
+
+      - name: Compile (no Maven)
+        shell: pwsh
+        run: ./build.ps1
 
   spring-huggingface:
     name: Spring HuggingFace Docker build + healthcheck
