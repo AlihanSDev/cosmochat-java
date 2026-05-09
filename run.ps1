@@ -1,5 +1,5 @@
 # Run script for CosmoChat (Maven-based)
-# Requires Maven to be installed
+# Uses Maven Wrapper if available
 
 # Load .env if exists (for HF_TOKEN)
 $envFile = "backend/spring-huggingface/.env"
@@ -17,12 +17,15 @@ if (Test-Path $envFile) {
 
 Write-Host "`n=== Running CosmoChat (Maven) ===" -ForegroundColor Yellow
 
-# Check Maven
-try {
-    $null = mvn -v
-} catch {
-    Write-Host "Maven not found! Install Maven or use run-manual.ps1" -ForegroundColor Red
-    exit 1
+# Determine Maven command
+$MAVEN = "./mvnw"
+if (-not (Test-Path $MAVEN)) {
+    $MAVEN = "mvn"
+    Write-Host "Using system Maven" -ForegroundColor Gray
+} else {
+    Write-Host "Using Maven Wrapper" -ForegroundColor Gray
+    # Ensure wrapper is executable on Unix
+    if ($IsLinux -or $IsMacOS) { chmod +x $MAVEN }
 }
 
 Write-Host "`nNote: AI backends require external services:" -ForegroundColor Yellow
@@ -40,4 +43,4 @@ if ($env:HF_MODEL_ID) {
 }
 
 # Run
-mvn @mvnArgs
+& $MAVEN @mvnArgs

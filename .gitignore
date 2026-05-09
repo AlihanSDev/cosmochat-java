@@ -1,12 +1,13 @@
 # Build outputs
 build/
 out/
+target/
 *.class
 
 # JavaFX (large SDK files)
 javafx/
 javafx.zip
-javafx-sdk-*/
+javafx-sdk*/
 
 # Libraries (if not tracking binaries)
 lib/
@@ -32,12 +33,16 @@ __pycache__/
 backend/models/
 backend/.venv/
 
-# Test scripts (local only)
+# Test scripts (local only, not real unit tests)
 test_*.py
 test_simple.py
 test_*.java
-src/test/
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# Maven Wrapper
+.mvn/
+mvnw
+mvnw.cmd

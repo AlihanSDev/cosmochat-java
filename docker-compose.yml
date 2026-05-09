@@ -1,36 +1,60 @@
 version: '3.8'
 
 services:
-  # Qwen2.5-Coder API service (only coder needed)
+  # Spring Boot HuggingFace API Service
+  huggingface-service:
+    build:
+      context: .
+      dockerfile: backend/spring-huggingface/Dockerfile
+    container_name: cosmochat-huggingface
+    ports:
+      - "8080:8080"
+    environment:
+      # HuggingFace configuration
+      - HF_TOKEN=${HF_TOKEN:-your_hf_token_here}
+      - HF_API_BASE_URL=${HF_API_BASE_URL:-https://router.huggingface.co/v1}
+      - HF_MODEL_ID=${HF_MODEL_ID:-Qwen/Qwen2.5-Coder-7B-Instruct}
+      - HF_NSCALE_SUFFIX=${HF_NSCALE_SUFFIX:-:featherless-ai}
+      - SERVER_PORT=8080
+    networks:
+      - cosmochat-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  # Python Qwen Coder API (local GGUF model)
   coder-api:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: cosmochat-coder
-    command: >
-      sh -c "
-        echo 'Waiting for model files...' &&
-        sleep 5 &&
-        gunicorn --bind 0.0.0.0:5001 --workers 1 --threads 4 --timeout 120 coder_api:app
-      "
     ports:
       - "5001:5001"
     volumes:
-      # Mount models directory for persistence (maps to /app/backend/models)
       - ./backend/models:/app/backend/models:ro
     environment:
-      - PYTHONUNBUFFERED=1
       - FLASK_ENV=production
+      - FLASK_DEBUG=0
+      - MAX_TOKENS=512
+      - TEMPERATURE=0.7
+      - LLAMA_THREADS=4
+      - LLAMA_GPU_LAYERS=0
+      - HOST=0.0.0.0
+    networks:
+      - cosmochat-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:5001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 30s
     restart: unless-stopped
-    networks:
-      - cosmochat-network
 
 networks:
   cosmochat-network:
     driver: bridge
+

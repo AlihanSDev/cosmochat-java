@@ -1,31 +1,26 @@
-# Simple build script using Maven (recommended)
-# Requires: Java 17+, Maven
+# Simple build script using Maven Wrapper (recommended)
+# Requires: Java 17+
 
 Write-Host "`n=== Building CosmoChat ===" -ForegroundColor Cyan
 
-# Resolve Maven path: check local (../apache-maven-*) else try PATH
-$MAVEN = $null
-$possiblePaths = @(
-    "..\apache-maven-3.9.9\bin\mvn.cmd",
-    "..\apache-maven\bin\mvn.cmd",
-    "mvn.cmd"
-)
-
-foreach ($p in $possiblePaths) {
-    $full = Resolve-Path $p -ErrorAction SilentlyContinue
-    if ($full) {
-        $MAVEN = $full
-        break
-    }
+# Check if Maven Wrapper exists
+$MAVEN_WRAPPER = "./mvnw"
+if (-not (Test-Path $MAVEN_WRAPPER)) {
+    # Fallback to system Maven if wrapper missing
+    $MAVEN = "mvn"
+    Write-Host "Maven Wrapper not found, using system Maven..." -ForegroundColor Yellow
+}
+else {
+    $MAVEN = $MAVEN_WRAPPER
+    Write-Host "Using Maven Wrapper" -ForegroundColor Gray
 }
 
-if (-not $MAVEN) {
-    Write-Host "❌ Maven not found." -ForegroundColor Red
-    Write-Host "   Expected: ..\apache-maven-3.9.9\bin\mvn.cmd`n" -ForegroundColor Yellow
-    exit 1
+# Ensure wrapper is executable on *nix (ignored on Windows)
+if ($IsLinux -or $IsMacOS) {
+    chmod +x $MAVEN_WRAPPER
 }
 
-Write-Host "Using Maven: $MAVEN`n" -ForegroundColor Gray
+Write-Host "Running: $MAVEN clean compile`n" -ForegroundColor Gray
 
 & $MAVEN clean compile | Out-Null
 if ($LASTEXITCODE -ne 0) {

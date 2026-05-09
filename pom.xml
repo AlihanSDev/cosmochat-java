@@ -74,6 +74,22 @@
             <version>5.11.0</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- H2 Database for tests -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.2.224</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- AssertJ for fluent assertions -->
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.26.3</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -105,6 +121,13 @@
                 <version>3.1.2</version>
                 <configuration>
                     <useModulePath>false</useModulePath>
+                    <!-- Enable reflection access for tests -->
+                    <argLine>
+                        --add-opens cosmochat/cosmochat.database=ALL-UNNAMED
+                        --add-opens cosmochat/cosmochat.domain=ALL-UNNAMED
+                        --add-opens cosmochat/cosmochat.infrastructure=ALL-UNNAMED
+                        --add-opens cosmochat/cosmochat.security=ALL-UNNAMED
+                    </argLine>
                 </configuration>
             </plugin>
         </plugins>

@@ -21,11 +21,34 @@ public class DatabaseManager {
             throw new SQLException("SQLite JDBC driver not found", e);
         }
 
-        // Create app data directory: ~/.cosmochat/
-        Path appDir = getAppDataDirectory();
-        Path dbPath = appDir.resolve(DB_NAME);
+        String url;
+        String dbPath;
+        
+        // Check if we're in test mode (for CI/testing)
+        String testMode = System.getProperty("cosmochat.test.mode");
+        if ("h2".equals(testMode)) {
+            // Use H2 in-memory database for tests (faster, no file I/O)
+            try {
+                Class.forName("org.h2.Driver");
+                url = "jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=SQLite";
+                this.connection = DriverManager.getConnection(url);
+                initializeSchema();
+                return;
+            } catch (ClassNotFoundException e) {
+                throw new SQLException("H2 driver not found for test mode", e);
+            }
+        } else if ("sqlite-memory".equals(testMode)) {
+            // Use SQLite in-memory database
+            url = "jdbc:sqlite::memory:";
+            this.connection = DriverManager.getConnection(url);
+            initializeSchema();
+            return;
+        }
 
-        String url = "jdbc:sqlite:" + dbPath.toString();
+        // Production mode: file-based SQLite
+        Path appDir = getAppDataDirectory();
+        dbPath = appDir.resolve(DB_NAME).toString();
+        url = "jdbc:sqlite:" + dbPath;
 
         this.connection = DriverManager.getConnection(url);
         this.connection.setAutoCommit(true);
