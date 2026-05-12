@@ -20,9 +20,9 @@ public class CompositionRoot {
             // Infrastructure adapters
             DatabaseManager dbManager = DatabaseManager.getInstance();
 
-            UserRepository userRepository = new SqliteUserRepository();
-            ChatRepository chatRepository = new SqliteChatRepository();
-            MessageRepository messageRepository = new SqliteMessageRepository();
+            UserRepository userRepository = new JdbcUserRepository();
+            ChatRepository chatRepository = new JdbcChatRepository();
+            MessageRepository messageRepository = new JdbcMessageRepository();
             
             // AI adapters
             AiPort pythonAiPort = new PythonAiClient();            // Local Qwen (port 5001)

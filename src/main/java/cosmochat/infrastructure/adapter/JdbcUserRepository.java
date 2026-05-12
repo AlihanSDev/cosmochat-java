@@ -9,10 +9,10 @@ import cosmochat.application.mapper.DomainMapper;
 import java.sql.*;
 import java.util.Optional;
 
-public class SqliteUserRepository implements UserRepository {
+public class JdbcUserRepository implements UserRepository {
     private final Connection connection;
 
-    public SqliteUserRepository() throws SQLException {
+    public JdbcUserRepository() throws SQLException {
         this.connection = DatabaseManager.getInstance().getConnection();
         initialize();
     }
@@ -40,7 +40,6 @@ public class SqliteUserRepository implements UserRepository {
     @Override
     public User save(User user) {
         if (user.getId().getValue() == 0) {
-            // Insert
             String sql = "INSERT INTO users (username, email, password_hash, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)";
             try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
                 stmt.setString(1, user.getUsername());
@@ -60,7 +59,6 @@ public class SqliteUserRepository implements UserRepository {
                 throw new RuntimeException(e);
             }
         } else {
-            // Update
             String sql = "UPDATE users SET username = ?, email = ? WHERE id = ?";
             try (PreparedStatement stmt = connection.prepareStatement(sql)) {
                 stmt.setString(1, user.getUsername());

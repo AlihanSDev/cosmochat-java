@@ -12,10 +12,10 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SqliteMessageRepository implements MessageRepository {
+public class JdbcMessageRepository implements MessageRepository {
     private final Connection connection;
 
-    public SqliteMessageRepository() throws SQLException {
+    public JdbcMessageRepository() throws SQLException {
         this.connection = DatabaseManager.getInstance().getConnection();
         initialize();
     }
@@ -74,7 +74,6 @@ public class SqliteMessageRepository implements MessageRepository {
     }
 
     private String formatTimestamp(long epochMilli) {
-        // For simplicity, store as ISO string or epoch millis as string
         return String.valueOf(epochMilli);
     }
 }

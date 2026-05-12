@@ -12,10 +12,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-public class SqliteChatRepository implements ChatRepository {
+public class JdbcChatRepository implements ChatRepository {
     private final Connection connection;
 
-    public SqliteChatRepository() throws SQLException {
+    public JdbcChatRepository() throws SQLException {
         this.connection = DatabaseManager.getInstance().getConnection();
         initialize();
     }
@@ -25,7 +25,6 @@ public class SqliteChatRepository implements ChatRepository {
     @Override
     public Chat save(Chat chat) {
         if (chat.getId().getValue() == 0) {
-            // Insert
             String sql = "INSERT INTO chats (user_id, title, created_at, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)";
             try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
                 stmt.setInt(1, chat.getUserId().getValue());
@@ -44,7 +43,6 @@ public class SqliteChatRepository implements ChatRepository {
                 throw new RuntimeException(e);
             }
         } else {
-            // Update
             String sql = "UPDATE chats SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
             try (PreparedStatement stmt = connection.prepareStatement(sql)) {
                 stmt.setString(1, chat.getTitle());
