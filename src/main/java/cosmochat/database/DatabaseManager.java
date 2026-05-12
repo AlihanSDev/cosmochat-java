@@ -4,25 +4,20 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
 public class DatabaseManager {
-    private static final String DB_NAME = "cosmo_chat.db";
     private static DatabaseManager instance;
     private final Connection connection;
 
     private DatabaseManager() throws SQLException {
         try {
-            // Load SQLite JDBC driver
-            Class.forName("org.sqlite.JDBC");
+            // Load PostgreSQL JDBC driver
+            Class.forName("org.postgresql.Driver");
         } catch (ClassNotFoundException e) {
-            throw new SQLException("SQLite JDBC driver not found", e);
+            throw new SQLException("PostgreSQL JDBC driver not found", e);
         }
 
         String url;
-        String dbPath;
         
         // Check if we're in test mode (for CI/testing)
         String testMode = System.getProperty("cosmochat.test.mode");
@@ -30,46 +25,41 @@ public class DatabaseManager {
             // Use H2 in-memory database for tests (faster, no file I/O)
             try {
                 Class.forName("org.h2.Driver");
-                url = "jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=SQLite";
+                url = "jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL";
                 this.connection = DriverManager.getConnection(url);
                 initializeSchema();
                 return;
             } catch (ClassNotFoundException e) {
                 throw new SQLException("H2 driver not found for test mode", e);
             }
-        } else if ("sqlite-memory".equals(testMode)) {
-            // Use SQLite in-memory database
-            url = "jdbc:sqlite::memory:";
+        }
+
+        // Production mode: PostgreSQL (configure via env vars or system properties)
+        url = getConfigValue("COSMOCHAT_DB_URL", "cosmochat.db.url", "jdbc:postgresql://localhost:5432/cosmochat");
+        String user = getConfigValue("COSMOCHAT_DB_USER", "cosmochat.db.user", null);
+        String password = getConfigValue("COSMOCHAT_DB_PASSWORD", "cosmochat.db.password", null);
+
+        if (user != null && password != null) {
+            this.connection = DriverManager.getConnection(url, user, password);
+        } else if (user != null) {
+            this.connection = DriverManager.getConnection(url, user, "");
+        } else {
             this.connection = DriverManager.getConnection(url);
-            initializeSchema();
-            return;
         }
-
-        // Production mode: file-based SQLite
-        Path appDir = getAppDataDirectory();
-        dbPath = appDir.resolve(DB_NAME).toString();
-        url = "jdbc:sqlite:" + dbPath;
-
-        this.connection = DriverManager.getConnection(url);
         this.connection.setAutoCommit(true);
-        // Enable foreign key constraints (disabled by default in SQLite)
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute("PRAGMA foreign_keys = ON");
-        }
         initializeSchema();
     }
 
-    private Path getAppDataDirectory() {
-        String userHome = System.getProperty("user.home");
-        Path appDir = Paths.get(userHome, ".cosmochat");
-        try {
-            if (!Files.exists(appDir)) {
-                Files.createDirectories(appDir);
-            }
-        } catch (Exception e) {
-            System.err.println("Warning: Could not create app directory: " + appDir);
+    private String getConfigValue(String envKey, String sysPropKey, String defaultValue) {
+        String fromSysProp = System.getProperty(sysPropKey);
+        if (fromSysProp != null && !fromSysProp.isBlank()) {
+            return fromSysProp.trim();
         }
-        return appDir;
+        String fromEnv = System.getenv(envKey);
+        if (fromEnv != null && !fromEnv.isBlank()) {
+            return fromEnv.trim();
+        }
+        return defaultValue;
     }
 
     private void initializeSchema() throws SQLException {
@@ -77,7 +67,7 @@ public class DatabaseManager {
             // Users table
             stmt.execute("""
                 CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     username TEXT NOT NULL UNIQUE,
                     email TEXT NOT NULL UNIQUE,
                     password_hash TEXT NOT NULL,
@@ -88,7 +78,7 @@ public class DatabaseManager {
             // Chats table
             stmt.execute("""
                 CREATE TABLE IF NOT EXISTS chats (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL,
                     title TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -100,7 +90,7 @@ public class DatabaseManager {
             // Messages table
             stmt.execute("""
                 CREATE TABLE IF NOT EXISTS messages (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     chat_id INTEGER NOT NULL,
                     role TEXT NOT NULL,
                     text TEXT NOT NULL,

@@ -26,7 +26,7 @@ public class SqliteChatRepository implements ChatRepository {
     public Chat save(Chat chat) {
         if (chat.getId().getValue() == 0) {
             // Insert
-            String sql = "INSERT INTO chats (user_id, title, created_at, updated_at) VALUES (?, ?, datetime('now'), datetime('now'))";
+            String sql = "INSERT INTO chats (user_id, title, created_at, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)";
             try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
                 stmt.setInt(1, chat.getUserId().getValue());
                 stmt.setString(2, chat.getTitle());
@@ -45,7 +45,7 @@ public class SqliteChatRepository implements ChatRepository {
             }
         } else {
             // Update
-            String sql = "UPDATE chats SET title = ?, updated_at = datetime('now') WHERE id = ?";
+            String sql = "UPDATE chats SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
             try (PreparedStatement stmt = connection.prepareStatement(sql)) {
                 stmt.setString(1, chat.getTitle());
                 stmt.setInt(2, chat.getId().getValue());
@@ -103,7 +103,7 @@ public class SqliteChatRepository implements ChatRepository {
 
     @Override
     public void updateTitle(ChatId chatId, String newTitle) {
-        String sql = "UPDATE chats SET title = ?, updated_at = datetime('now') WHERE id = ?";
+        String sql = "UPDATE chats SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, newTitle);
             stmt.setInt(2, chatId.getValue());

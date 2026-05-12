@@ -4,6 +4,30 @@ Write-Host "`n=== Running CosmoChat with Qwen Coder (Python) ===" -ForegroundCol
 
 $ErrorActionPreference = "Stop"
 
+function Import-DotEnvIfPresent {
+    param([string]$Path = ".env")
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    Get-Content -LiteralPath $Path | ForEach-Object {
+        $line = $_.Trim()
+        if (-not $line) { return }
+        if ($line.StartsWith("#")) { return }
+        $idx = $line.IndexOf("=")
+        if ($idx -lt 1) { return }
+        $key = $line.Substring(0, $idx).Trim()
+        $value = $line.Substring($idx + 1).Trim()
+        if ($value.Length -ge 2) {
+            $first = $value[0]
+            $last = $value[$value.Length - 1]
+            if (($first -eq '"' -and $last -eq '"') -or ($first -eq "'" -and $last -eq "'")) {
+                $value = $value.Substring(1, $value.Length - 2)
+            }
+        }
+        if ($key) { Set-Item -Path ("env:{0}" -f $key) -Value $value }
+    }
+}
+
+Import-DotEnvIfPresent
+
 $USER = $env:USERPROFILE
 $JARS = @(
     "$USER\.m2\repository\org\openjfx\javafx-base\21.0.11\javafx-base-21.0.11-win.jar",
@@ -12,7 +36,7 @@ $JARS = @(
     "$USER\.m2\repository\org\openjfx\javafx-web\21.0.11\javafx-web-21.0.11-win.jar",
     "$USER\.m2\repository\org\openjfx\javafx-media\21.0.11\javafx-media-21.0.11-win.jar",
     "$USER\.m2\repository\com\google\code\gson\gson\2.10.1\gson-2.10.1.jar",
-    "$USER\.m2\repository\org\xerial\sqlite-jdbc\3.45.2.0\sqlite-jdbc-3.45.2.0.jar",
+    "$USER\.m2\repository\org\postgresql\postgresql\42.7.4\postgresql-42.7.4.jar",
     "$USER\.m2\repository\org\slf4j\slf4j-api\1.7.36\slf4j-api-1.7.36.jar"
 )
 
@@ -30,7 +54,7 @@ $MODULE_PATH = "target/classes;" + ($JARS -join ';')
 Write-Host "`nModule path configured:" -ForegroundColor Gray
 Write-Host "  Build dir: $BUILD_DIR"
 Write-Host "  JavaFX: base, controls, graphics, web, media"
-Write-Host "  Libs: gson, sqlite-jdbc, slf4j-api`n" -ForegroundColor Gray
+Write-Host "  Libs: gson, postgresql, slf4j-api`n" -ForegroundColor Gray
 
 # Check Python API
 Write-Host "Checking Python API server..." -ForegroundColor Yellow

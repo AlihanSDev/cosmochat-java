@@ -1,4 +1,24 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cosmochat-postgres
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-cosmochat}
+      - POSTGRES_USER=${POSTGRES_USER:-cosmochat}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-cosmochat}
+    volumes:
+      - cosmochat-postgres-data:/var/lib/postgresql/data
+    networks:
+      - cosmochat-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   # Spring Boot HuggingFace API Service
   huggingface-service:
     build:
@@ -56,3 +76,5 @@ networks:
   cosmochat-network:
     driver: bridge
 
+volumes:
+  cosmochat-postgres-data:

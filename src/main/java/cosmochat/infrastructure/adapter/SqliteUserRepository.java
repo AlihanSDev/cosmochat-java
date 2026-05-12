@@ -41,7 +41,7 @@ public class SqliteUserRepository implements UserRepository {
     public User save(User user) {
         if (user.getId().getValue() == 0) {
             // Insert
-            String sql = "INSERT INTO users (username, email, password_hash, created_at) VALUES (?, ?, ?, datetime('now'))";
+            String sql = "INSERT INTO users (username, email, password_hash, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)";
             try (PreparedStatement stmt = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
                 stmt.setString(1, user.getUsername());
                 stmt.setString(2, user.getEmail());

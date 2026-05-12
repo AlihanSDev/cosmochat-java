@@ -14,7 +14,7 @@ CosmoChat — desktop JavaFX‑клиент чата с подключаемым
 
 ## Архитектура
 
-- `src/main/java` — JavaFX приложение (UI, SQLite, сетевой клиент).
+- `src/main/java` — JavaFX приложение (UI, PostgreSQL, сетевой клиент).
 - `backend/` — Python API (локальные модели) и Java Spring‑сервис:
   - `backend/spring-huggingface` — Spring Boot сервис `:8080`
   - `backend/qwen_api.py` — Python API `:5000`

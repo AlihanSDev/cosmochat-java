@@ -5,7 +5,7 @@
       requires java.net.http;
       requires com.google.gson;
       requires java.sql;
-      requires org.xerial.sqlitejdbc;
+      requires org.postgresql.jdbc;
 
      // Domain layer — pure entities, value objects, ports (interfaces)
      opens cosmochat.domain to javafx.graphics;
